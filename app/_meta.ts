@@ -1,4 +1,6 @@
-export default {
+import type { MetaRecord } from 'nextra'
+
+const meta: MetaRecord = {
   index: '课程导读 (Overview)',
   'ch01-fundamentals': '第 1 章：Agent 基础与架构',
   'ch02-context': '第 2 章：Context 上下文工程',
@@ -13,3 +15,5 @@ export default {
   reference: '核心速查 (Reference)',
   mission: '学习使命 (Mission)'
 }
+
+export default meta

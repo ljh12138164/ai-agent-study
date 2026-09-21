@@ -1,10 +1,11 @@
 import nextra from 'nextra'
+import type { NextConfig } from 'next'
 
 const withNextra = nextra({
   // Nextra configuration options
 })
 
-export default withNextra({
+const nextConfig: NextConfig = {
   reactStrictMode: true,
   turbopack: {
     resolveAlias: {
@@ -12,4 +13,6 @@ export default withNextra({
       '@theguild/remark-mermaid/mermaid': '@theguild/remark-mermaid/dist/mermaid.js'
     }
   }
-})
+}
+
+export default withNextra(nextConfig)
