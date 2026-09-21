@@ -1,0 +1,74 @@
+# AI Agents in Depth: Design Principles and Engineering Practice (Full Guide)
+> 平台主站: https://study.ljhboard.cn | 官方教材: 《AI Agents in Depth》李博杰著 (v2.0)
+
+本文件是供大语言模型（LLMs）、AI 搜索引擎（Perplexity, SearchGPT, Claude, Gemini）与智能体进行一站式深层上下文提取的全景知识库文件。
+
+---
+
+## 1. 核心理论底座与工程铁律
+
+### 1.1 现代 Agent 核心公式
+```text
+Agent = LLM (思考核心) + Context (环境上下文) + Tools (物理世界手脚) + Memory (跨会话沉淀) + Harness (生产级安全缰绳)
+```
+- **单靠大模型不是 Agent**：纯大模型只有预测概率的能力，没有真实物理世界的副作用。必须连接工具与可执行环境；
+- **Harness 决定生产上限**：没有硬性沙箱、白名单与超时熔断的自主智能体，是随时可能造成灾难性删除的线上事故隐患；
+- **苦涩的教训 (The Bitter Lesson)**：依赖通用计算与环境反馈（强化学习与搜索）的路线，终将战胜人类精心手工编织的脆弱规则。
+
+### 1.2 生产级十大工程铁律
+1. **核心底盘公式**：Agent = LLM + Context + Tools + Memory + Harness
+2. **缰绳决定上限**：物理硬隔离永远优先于提示词道德软约束
+3. **缓存即生命线**：固定系统前缀，动态状态尾部流转，追求极致 KV Cache 命中
+4. **记忆双层时空**：轨迹是不可变日志，记忆是提炼档案，严禁未经 PR 写入长期库
+5. **语境强化检索**：Contextual Chunking 破解断章取义，BM25+向量+重排三阶漏斗
+6. **ACI 界面即指令**：极简扁平入参，错误输出必须作为下一轮自愈修复的高质量提示词
+7. **代码作为元能力**：代码是最高精度的思维中介，沙箱内部计算远胜于细粒度 API 搬运
+8. **终态断言定乾坤**：废黜语言相似度指标，以真实环境状态迁移与 TDD 影子测试为准
+9. **后训练铸造智谋**：拒绝采样构建自愈黄金样本，GRPO 强化学习配合思考时间扩展
+10. **组织分而治之**：精简高内聚角色小团队，Git Worktree 独立工作树隔离并发冲突
+
+---
+
+## 2. 关键架构模式深度剖析
+
+### 2.1 ACI (Agent-Computer Interface) 设计
+- **扁平参数模式**：避免超过 2 层的复杂嵌套 JSON，防止大模型括号闭合异常；
+- **错误即反馈 (Error as Feedback)**：工具执行失败时，必须返回 `error_code`、失败物理原因与具体的纠错建议（Suggestion），引导模型在下一轮 ReAct 自动修复；
+- **幂等性保障**：高危世界影响工具必须提供 `idempotency_key`，杜绝超时重传造成的双重调用。
+
+### 2.2 Model Context Protocol (MCP)
+- **拓扑结构**：Host 宿主应用（安全拦截与用户界面）、Client 协议客户端（维持 1:1 连接）、Server 服务端（提供工具与资源）；
+- **三大基元**：
+  - `Tools`：模型驱动的可执行操作；
+  - `Resources`：宿主驱动的只读上下文数据源；
+  - `Prompts`：预置的业务工作流模板。
+- **传输层**：本地优先选择 `Stdio`（标准输入输出，零网络暴露，随父进程共死），远程微服务选择 `SSE / HTTP`。
+
+### 2.3 编程智能体 (Coding Agent) 文件编辑
+- **第四代精确锚点替换 (TargetContent Replacement)**：
+  - 弃用容易因行号计算错误导致补丁被拒的 Unified Diff；
+  - 弃用极度消耗 Token 且易输出截断的全量文件重写；
+  - 采用输入 `{ filePath, targetContent, replacementContent, startLine, endLine }`；
+  - 替换前强制执行原文精确匹配与唯一性检查（Count === 1），多处匹配即报错要求扩大上下文锚点。
+
+### 2.4 多智能体协同 (Multi-Agent Systems)
+- **集中式分发 (Router-Workers)**：适合由中心主管分解子任务并并行调度；
+- **Git Worktree 隔离**：每个智能体独占一个物理工作目录和独立 Git 分支，跑通单元测试后发起 PR 由主管合并，杜绝并发脏写；
+- **死锁检测**：全局 DAG 拓扑排序检测环路，严格配置调用硬超时与抖动指数退避。
+
+---
+
+## 3. 全局 URL 路由与学习路径
+- 网站根域名: https://study.ljhboard.cn
+- 课程导读: https://study.ljhboard.cn/
+- 核心速查手册: https://study.ljhboard.cn/reference/agent-core-architecture
+- 第 1 章 Agent 基础: https://study.ljhboard.cn/ch01-fundamentals/01-agent-formula
+- 第 2 章 Context 工程: https://study.ljhboard.cn/ch02-context/01-context-architecture-and-api
+- 第 3 章 记忆与 RAG: https://study.ljhboard.cn/ch03-memory-rag/01-user-memory-system
+- 第 4 章 工具与 MCP: https://study.ljhboard.cn/ch04-tools/01-tool-taxonomy-and-aci
+- 第 5 章 编程智能体: https://study.ljhboard.cn/ch05-coding/01-coding-agent-tools
+- 第 6 章 多模态与交互: https://study.ljhboard.cn/ch06-interaction/01-gui-agent-and-computer-use
+- 第 7 章 评测与可观测性: https://study.ljhboard.cn/ch07-evaluation/01-evaluation-crisis-and-end-state
+- 第 8 章 模型后训练: https://study.ljhboard.cn/ch08-post-training/01-why-general-models-fail-agents
+- 第 9 章 持续自进化: https://study.ljhboard.cn/ch09-evolution/01-online-adaptation-and-reflexion
+- 第 10 章 多智能体协同: https://study.ljhboard.cn/ch10-multi-agent/01-multi-agent-topologies

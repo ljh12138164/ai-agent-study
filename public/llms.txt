@@ -1,0 +1,80 @@
+# AI Agents in Depth: Design Principles and Engineering Practice
+> 《大模型智能体深度研发与工程实践》交互式学习平台 (https://study.ljhboard.cn)
+
+AI Agents in Depth 是面向软件工程师、全栈开发者与 AI 架构师的现代智能体系统实战知识库。基于李博杰（Bojie Li）教材 v2.0 体系化构建，系统阐述生产级 Agent 核心公式、Context 工程、KV Cache 机制、MCP 协议、Coding Agent、多模态交互与多智能体系统（MAS）协同架构。
+
+## 核心基石定义 (Core Fundamentals)
+- **Agent 核心公式**: Agent = LLM (大模型中枢) + Context (上下文环境) + Tools (物理世界工具) + Memory (跨会话记忆) + Harness (生产级安全缰绳)
+- **ACI (Agent-Computer Interface)**: 专为概率模型设计的计算机交互界面，倡导扁平参数结构与“错误即自愈提示词”反馈
+- **MCP (Model Context Protocol)**: Anthropic 开源的标准协议，将工具集成的 N×M 混乱网状依赖收敛为 N+M 标准星型拓扑
+- **双层记忆架构 (Two-Tier Memory)**: Tier 1 毫秒级运行工作记忆与 Tier 2 持久沉淀长期记忆解耦，严格执行知识 PR 审核防污染
+- **代码即元能力 (Code as Meta-Capability)**: 代码是最高精度的思维中介与执行载体，沙箱内存计算远胜于细粒度 API 搬运
+
+## 全书章节导航与课程索引 (Curriculum Index)
+
+### 第 1 章：Agent 基础与架构
+- [1.1 现代 Agent 核心公式与概念边界](https://study.ljhboard.cn/ch01-fundamentals/01-agent-formula): 剖析现代智能体公式构成、Manus与OpenClaw工业范式，呼应萨顿《苦涩的教训》
+- [1.2 ReAct 循环与上下文消融实验](https://study.ljhboard.cn/ch01-fundamentals/02-react-loop-and-ablation): 详解 Think-Act-Observe 决策回路与思考步不可剔除的消融实证
+- [1.3 生产级 Harness 缰绳工程](https://study.ljhboard.cn/ch01-fundamentals/03-harness-engineering): 对比工作流与自主智能体，筑牢三层生产级安全防御网
+- [1.4 贯穿全书的核心设计模式](https://study.ljhboard.cn/ch01-fundamentals/04-design-patterns): 掌握 Proposer-Reviewer 提议审核模式与只读追加写入法则
+
+### 第 2 章：Context 上下文工程
+- [2.1 上下文能力底座与 API 结构](https://study.ljhboard.cn/ch02-context/01-context-architecture-and-api): 梳理 Transformer 窗口机制、System/Developer/User 权限分级与调用契约
+- [2.2 KV Cache 机制与缓存友好设计](https://study.ljhboard.cn/ch02-context/02-kv-cache-optimization): 揭示 Radix Tree 前缀复用机理，剖析 5 大缓存失效反模式
+- [2.3 流程驱动 SOP、防注入与 Agent Skills](https://study.ljhboard.cn/ch02-context/03-prompt-engineering-and-skills): 渐进式技能披露规范与间接提示词注入防御
+- [2.4 Agent 状态栏与显式状态蒸馏](https://study.ljhboard.cn/ch02-context/04-agent-status-bar): 破解长程多轮对话注意力漂移，打造动态显式工作台状态栏
+- [2.5 上下文分层压缩与防腐烂策略](https://study.ljhboard.cn/ch02-context/05-compression-strategies): 实施四级压缩梯队与子智能体（Sub-Agent）上下文物理隔离
+
+### 第 3 章：用户记忆与知识库 RAG
+- [3.1 用户记忆系统：三层评估与存储范式](https://study.ljhboard.cn/ch03-memory-rag/01-user-memory-system): 区分运行轨迹日志与长期记忆档案，掌握三层评估与存储格式演进
+- [3.2 生产级 RAG：分块、混合检索与神经重排](https://study.ljhboard.cn/ch03-memory-rag/02-rag-pipeline-hybrid): 结构化递归切块、BM25+向量双路混合检索（RRF）与 Cross-Encoder 重排
+- [3.3 结构化索引：RAPTOR、GraphRAG 与虚拟文件系统](https://study.ljhboard.cn/ch03-memory-rag/03-structured-indexing): 树状递归摘要网络、实体关联图谱与代码库虚拟文件系统（VFS）
+- [3.4 Agentic RAG 与 Anthropic 上下文检索突破](https://study.ljhboard.cn/ch03-memory-rag/04-agentic-rag-and-contextual-retrieval): 主动反思循环检索与 Contextual Retrieval 前缀切片增强
+- [3.5 知识 PR 更新闭环与双层终极记忆架构](https://study.ljhboard.cn/ch03-memory-rag/05-knowledge-updates-and-two-tier-memory): 提议审核机制防脏数据污染，快慢解耦双层存储与艾宾浩斯遗忘衰减
+
+### 第 4 章：工具工程与 MCP
+- [4.1 工具分类学与 ACI 界面设计法则](https://study.ljhboard.cn/ch04-tools/01-tool-taxonomy-and-aci): Read-only / Modifying / World-Affecting 三级风险划分与 ACI 五大法则
+- [4.2 MCP 协议深度解析：标准架构与通信规范](https://study.ljhboard.cn/ch04-tools/02-mcp-protocol-architecture): Host-Client-Server 三角模型，Stdio 与 SSE 传输通道，Tools/Resources/Prompts 基元
+- [4.3 工具爆炸破局：分层检索与 MCP-Zero 延迟挂载](https://study.ljhboard.cn/ch04-tools/03-dynamic-discovery-and-mcp-zero): 两阶段元工具发现与 Code-as-Tool 代码即终极工具
+- [4.4 生产级执行环境：Sidecar 容器沙箱与权限安全缰绳](https://study.ljhboard.cn/ch04-tools/04-sidecar-sandbox-and-safety): MicroVM 隔离、一次性短生命周期 Sidecar 与三道安全防线
+
+### 第 5 章：编程智能体 Coding Agent
+- [5.1 编程智能体 7 大核心工具链设计](https://study.ljhboard.cn/ch05-coding/01-coding-agent-tools): 为什么专用 ACI 工具远优于裸奔 Bash，7 大基石工具规范
+- [5.2 文件编辑算法进化史：从 Diff 到精确锚点替换](https://study.ljhboard.cn/ch05-coding/02-file-editing-algorithms): 全量重写、Unified Diff、Search/Replace 到第四代 TargetContent 精确替换
+- [5.3 测试驱动闭环与防篡改护栏机制](https://study.ljhboard.cn/ch05-coding/03-tdd-closed-loop-and-anti-cheating): TDD 自愈正循环，遏制 Agent 偷改测试断言作弊，影子测试集（Shadow Tests）
+- [5.4 代码作为元能力：智能体的 6 维可执行思维](https://study.ljhboard.cn/ch05-coding/04-code-as-meta-capability): 规划、记忆、工作流、检索、自验与反思的全面代码化表达
+- [5.5 致命三元组与代码智能体防御工程](https://study.ljhboard.cn/ch05-coding/05-lethal-triad-and-security): 未受信输入+执行权+私密凭据共振漏洞，瞬时凭据与零信任出口网闸
+
+### 第 6 章：多模态与交互工程
+- [6.1 GUI 智能体与 Computer Use](https://study.ljhboard.cn/ch06-interaction/01-gui-agent-and-computer-use): DOM 树 vs. 纯视觉像素定位，Set-of-Marks (SoM) 离散分类标记法
+- [6.2 拟人全双工语音智能体](https://study.ljhboard.cn/ch06-interaction/02-voice-agent-and-full-duplex): 300ms 黄金延迟红线、端到端 Speech-to-Speech、VAD 倾听音与打断（Barge-in）
+- [6.3 混合主动人机协同](https://study.ljhboard.cn/ch06-interaction/03-human-in-the-loop-collaboration): 四象限主动澄清时机模型，Generative UI 动态表单与 Artifacts 独立工件看板
+- [6.4 具身物理交互演进](https://study.ljhboard.cn/ch06-interaction/04-embodied-agent-and-sim2real): VLA 大模型，高层规划与 1000Hz 底层关节力矩解耦，Sim-to-Real 领域随机化
+
+### 第 7 章：评测与可观测性体系
+- [7.1 评测危机与终态断言](https://study.ljhboard.cn/ch07-evaluation/01-evaluation-crisis-and-end-state): 废黜 BLEU/ROUGE 文本相似度，确立系统终态物理状态断言
+- [7.2 工业级基准测试全景](https://study.ljhboard.cn/ch07-evaluation/02-industry-benchmarks-swe-gaia): SWE-bench 双测试集校验、WebArena 真实沙箱网络与 GAIA 多模态珠峰
+- [7.3 裁判员模型与偏差校准](https://study.ljhboard.cn/ch07-evaluation/03-llm-as-a-judge-and-biases): LLM-as-a-Judge 位置偏差、字数偏好与双向对调（Swap Calibration）校准
+- [7.4 生产级可观测性：OpenInference 追踪与成本监控](https://study.ljhboard.cn/ch07-evaluation/04-observability-and-opentelemetry): Trace-Span 树状调用模型，四大黄金监控信号与成本熔断
+
+### 第 8 章：智能体模型后训练
+- [8.1 通用模型的行动缺陷](https://study.ljhboard.cn/ch08-post-training/01-why-general-models-fail-agents): Next-Token 预测与行动决策目标冲突，工具幻觉与道歉死循环
+- [8.2 Agent SFT 数据工程](https://study.ljhboard.cn/ch08-post-training/02-agent-sft-and-trajectory-synthesis): 拒绝采样（Rejection Sampling）沙箱全绿正样本筛选与自愈轨迹注错
+- [8.3 环境反馈强化学习](https://study.ljhboard.cn/ch08-post-training/03-rlef-and-test-time-compute): 免 Critic 的 GRPO 算法、过程奖励 PRM 与推理阶段长思考链（Long CoT）扩展
+- [8.4 后训练工程避坑](https://study.ljhboard.cn/ch08-post-training/04-post-training-pitfalls-and-generalization): 80/20 混合回放防灾难性遗忘，模式多样化与过度思考惩罚
+
+### 第 9 章：持续演进与自进化
+- [9.1 在线自适应与 Reflexion 框架](https://study.ljhboard.cn/ch09-evolution/01-online-adaptation-and-reflexion): 自然语言反思（Verbal Reflection）低成本即时进化
+- [9.2 规则自进化与技能库积累](https://study.ljhboard.cn/ch09-evolution/02-evolving-rules-and-skills): 经验沉淀为 .agentrules 与 Skills 代码资产，目录级分层挂载
+- [9.3 工具自合成与技能涌现](https://study.ljhboard.cn/ch09-evolution/03-tool-self-synthesis): Tool-Maker 自编写新工具、沙箱自验与动态热注册
+- [9.4 演进安全缰绳与防退化](https://study.ljhboard.cn/ch09-evolution/04-evolutionary-safety-and-drift): 迷信规则根除、规则回归测试集与人类 PR 守门
+
+### 第 10 章：多智能体与终局展望
+- [10.1 多智能体通信拓扑与协作范式](https://study.ljhboard.cn/ch10-multi-agent/01-multi-agent-topologies): 集中式、流水线、黑板协议与红蓝对抗辩论博弈
+- [10.2 A2A 通信协议与死锁防范](https://study.ljhboard.cn/ch10-multi-agent/02-a2a-communication-and-deadlock): 结构化信封协议，Git Worktree 物理工作区隔离，DAG 死锁消除与抖动重试
+- [10.3 数字化软件组织镜像](https://study.ljhboard.cn/ch10-multi-agent/03-software-company-simulation): MetaGPT 与 ChatDev 虚拟研发团队仿真，康威定律与人月神话
+- [10.4 终局展望与指挥官心法](https://study.ljhboard.cn/ch10-multi-agent/04-future-and-orchestrator-mindset): 工程师从打字员到智能体指挥官的跃迁，全书十大工程铁律与 AGI 阶梯
+
+## 核心技术速查
+- [核心架构速查清单](https://study.ljhboard.cn/reference/agent-core-architecture): 核心公式、状态机、四级隔离与安全检查表一览
+- [完整版知识拓扑库](https://study.ljhboard.cn/llms-full.txt): 供 AI 大模型全面上下文调取的全文知识索引
