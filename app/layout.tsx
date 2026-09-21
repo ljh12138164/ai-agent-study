@@ -168,7 +168,7 @@ export default async function RootLayout({
           pageMap={pageMap}
           docsRepositoryBase="https://github.com/ljh12138164/ai-agent-study"
         >
-          {children}
+          {children ?? <></>}
         </Layout>
       </body>
     </html>

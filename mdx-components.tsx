@@ -10,9 +10,10 @@ export function useMDXComponents(components?: any) {
       const DefaultWrapper = docsComponents.wrapper
       return DefaultWrapper({
         ...props,
+        children: props?.children ?? <></>,
         bottomContent: (
           <>
-            {props.bottomContent}
+            {props?.bottomContent}
             <Comments />
           </>
         ),
