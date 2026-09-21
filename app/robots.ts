@@ -8,6 +8,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: '*',
         allow: '/',
+        disallow: ['/stats/'],
       },
       {
         // 专为 GEO（生成式引擎优化）放行主流 AI 搜索与知识抓取智能体

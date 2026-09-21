@@ -162,6 +162,11 @@ export default async function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
+        <script
+          defer
+          src="/stats/script.js"
+          data-website-id="a9b78dad-ae96-4f9c-8329-8ef1827b94a1"
+        />
       </Head>
       <body>
         <Layout
