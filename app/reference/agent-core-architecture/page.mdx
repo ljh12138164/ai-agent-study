@@ -1,0 +1,88 @@
+# 📑 Agent 核心架构与设计公式速查手册
+
+> **定位**：供日常开发与架构设计时快速查阅的知识胶囊，沉淀自《AI Agents in Depth》第 1 章。
+
+---
+
+## 1. 核心公式
+
+### 组成视图
+> **Agent = LLM (Brain) + Context (Eyes) + Tools (Hands & Feet)**
+
+### 工程落地视图
+> **Agent = Model + Harness**  
+> **Harness = 上下文管理 + 工具接口 + 约束 (Constrain) + 验证 (Verify) + 纠错 (Correct)**
+
+---
+
+## 2. API 消息五大组成
+
+| 组成部分 | 对应角色 | 生命周期与缓存建议 |
+| :--- | :--- | :--- |
+| **System Prompt** | `role: "system"` | 静态前缀（Static Prefix），严禁动态修改，确保命中 KV Cache。 |
+| **Tool Definitions** | `tools: [...]` | 静态声明或通过 Tool Search 渐进式披露。 |
+| **User Messages** | `role: "user"` | 动态追加，支持携带 Agent Status Bar。 |
+| **Assistant Messages** | `role: "assistant"` | 模型生成的思考（CoT）与工具调用决策，需原样存回历史。 |
+| **Tool Results** | `role: "tool"` | 外部工具真实执行结果，通过 `tool_call_id` 强关联。 |
+
+---
+
+## 3. 核心设计模式
+
+1.  **Proposer-Reviewer（提案-审查）**
+    *   生成与审查隔离在不同上下文。
+    *   审查者依赖独立外部证据（测试结果、渲染截图、工具返回值），不依赖生成者的思维解释。
+2.  **Progressive Disclosure（渐进式披露）**
+    *   不一次性将所有信息灌入上下文，先展示轻量目录/索引，按需加载详情。
+    *   极大节省 Token 与 KV Cache。
+3.  **Append-only（仅追加写入）**
+    *   历史状态只追加，绝不原地修改历史。
+    *   确保 KV Cache 稳定复用，保证系统可重放（Replayability）与可审计性。
+4.  **Boundary Set + Retention Set（边界集 + 保留集）**
+    *   评估或微调时，必须同时在“预期应改变的样本”与“绝不可被破坏的已有样本”上共同测试，严防能力遗忘与退化。
+5.  **Minimal Diff, Reversible（最小增量、可逆修改）**
+    *   修改保持最小粒度并记录来源，失败时可快速回滚定位。
+
+---
+
+## 4. 最小 ReAct 运行循环代码（TypeScript）
+
+```typescript
+import OpenAI from "openai";
+
+const client = new OpenAI();
+const messages: OpenAI.ChatCompletionMessageParam[] = [
+  { role: "system", content: "You are a helpful assistant." },
+  { role: "user", content: "What is the capital of France?" }
+];
+
+while (true) {
+  const response = await client.chat.completions.create({
+    model: "gpt-4o",
+    messages,
+    tools: [/* your tool definitions */]
+  });
+
+  const choice = response.choices[0].message;
+  messages.push(choice);
+
+  // 若无工具调用，任务结束
+  if (!choice.tool_calls || choice.tool_calls.length === 0) {
+    console.log("Final Output:", choice.content);
+    break;
+  }
+
+  // 并行或串行执行工具并回填
+  for (const toolCall of choice.tool_calls) {
+    const result = await executeTool(
+      toolCall.function.name,
+      JSON.parse(toolCall.function.arguments)
+    );
+    messages.push({
+      role: "tool",
+      tool_call_id: toolCall.id,
+      content: JSON.stringify(result)
+    });
+  }
+}
+```
