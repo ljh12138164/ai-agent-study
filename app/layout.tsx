@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
-import { Footer, Layout, Navbar } from 'nextra-theme-docs'
-import { Head } from 'nextra/components'
+import { Footer, Layout, Navbar, ThemeSwitch } from 'nextra-theme-docs'
+import { Head, Search } from 'nextra/components'
 import { getPageMap } from 'nextra/page-map'
 import 'nextra-theme-docs/style.css'
 
@@ -89,7 +89,9 @@ export default async function RootLayout({
         </span>
       }
       projectLink="https://github.com/ljh12138164/ai-agent-study"
-    />
+    >
+      <ThemeSwitch />
+    </Navbar>
   )
 
   const footer = (
@@ -167,6 +169,19 @@ export default async function RootLayout({
           footer={footer}
           pageMap={pageMap}
           docsRepositoryBase="https://github.com/ljh12138164/ai-agent-study"
+          themeSwitch={{
+            dark: '深色模式',
+            light: '浅色模式',
+            system: '跟随系统',
+          }}
+          search={
+            <Search
+              placeholder="搜索课程、知识库与代码 (按 Ctrl+K)..."
+              emptyResult="未找到匹配的课程内容"
+              loading="正在搜索知识库..."
+              errorText="加载搜索索引失败"
+            />
+          }
         >
           {children ?? <></>}
         </Layout>
