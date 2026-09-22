@@ -37,7 +37,7 @@ export function Comments() {
       <div className="x:flex x:items-center x:justify-between x:mb-6">
         <h3 className="x:text-lg x:font-semibold x:tracking-tight x:text-gray-900 x:dark:text-gray-100 x:flex x:items-center x:gap-2">
           <span>💬 课程答疑与互动讨论</span>
-          <span className="x:text-xs x:font-normal x:px-2 x:py-0.5 x:rounded-full x:bg-blue-50 x:text-blue-600 x:dark:bg-blue-950/60 x:dark:text-blue-400 x:border x:border-blue-200/60 x:dark:border-blue-800/60">
+          <span className="x:text-xs x:font-normal x:px-2 x:py-0.5 x:rounded-full x:bg-emerald-50 x:text-emerald-700 x:dark:bg-emerald-950/60 x:dark:text-emerald-300 x:border x:border-emerald-200/60 x:dark:border-emerald-800/60">
             Powered by GitHub Discussions
           </span>
         </h3>
@@ -45,7 +45,7 @@ export function Comments() {
           href={`https://github.com/${repo}/discussions`}
           target="_blank"
           rel="noreferrer"
-          className="x:text-xs x:text-gray-500 hover:x:text-blue-600 x:dark:text-gray-400 x:dark:hover:text-blue-400 x:transition-colors"
+          className="x:text-xs x:text-gray-500 hover:x:text-emerald-600 x:dark:text-gray-400 x:dark:hover:text-emerald-400 x:transition-colors"
         >
           在 GitHub 上查看全部讨论 →
         </a>

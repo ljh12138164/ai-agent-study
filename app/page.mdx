@@ -1,49 +1,14 @@
-# 🤖 AI Agent 深度开发与工程实践
+import { LandingHero } from '@/components/LandingHero'
+import { LandingFormulas } from '@/components/LandingFormulas'
+import { LandingCurriculum } from '@/components/LandingCurriculum'
+import { LandingPillars } from '@/components/LandingPillars'
+import { LandingFooterCTA } from '@/components/LandingFooterCTA'
+import styles from '@/components/landing.module.css'
 
-欢迎来到 **AI Agent 生产级开发实战课程**！
-
-本课程基于权威著作 **《AI Agents in Depth: Design Principles and Engineering Practice》（李博杰，2026）**，专为具备全栈/前端开发背景的工程师量身定制。我们将彻底打破“调个 API 就是 Agent”的表面认知，从底层协议、上下文工程、工具安全到闭环纠错，带你从零亲手构建出稳定可靠的自主 Agent 系统。
-
----
-
-## 🎯 核心公式
-
-现代 Agent 的本质不是单个模型的魔法，而是三位一体的系统工程：
-
-> **核心组成公式**：  
-> **Agent = LLM (Brain) + Context (Eyes) + Tools (Hands & Feet)**
-
-而在生产级工程落地视角下，它被扩展为：
-
-> **生产落地公式**：  
-> **Agent = Model + Harness**  
-> **Harness (缰绳系统)** = **上下文管理 + 工具接口 + 约束 (Constrain) + 验证 (Verify) + 纠错 (Correct)**
-
-底座模型负责概率推理，Harness 负责构建安全闭环，确保 Agent 在复杂的真实环境中不失控、不退化、不卡死。
-
----
-
-## 🗺️ 课程全景地图
-
-本课程包含十个由浅入深的核心模块：
-
-| 模块 | 核心内容 | 对应能力突破 |
-| :--- | :--- | :--- |
-| **01. Agent 核心基础** | ReAct 循环、无状态 API、消融实验、Harness 架构 | 建立 Agent 运转心智模型 |
-| **02. Context 上下文工程** | KV Cache 优化、静态前缀、Agent 状态栏、上下文分级压缩 | 降本 90%、消除上下文腐烂 |
-| **03. 用户记忆与知识库** | JSON Cards、Agentic RAG、上下文检索 (Contextual Retrieval) | 跨会话持久化与主动服务 |
-| **04. 工具系统与 ACI** | MCP 协议、工具渐进式披露、工具描述工程、Sidecar 审查 | 构建安全可扩展的手脚 |
-| **05. Coding Agent 与代码生成** | 7 大核心工具、文件编辑算法对比、测试闭环驱动、自愈系统 | 打造类 Claude Code 引擎 |
-| **06. 交互拓展与多模态** | 异步事件驱动、Voice 全双工、Computer Use 屏幕自动化 | 打破单轮交互的时间与模态限制 |
-| **07. Agent 科学评测** | Pass@k 与 Pass^k、LLM-as-a-Judge、失败归因与回归测试 | 摆脱盲目玄学，数据驱动演进 |
-| **08. 模型后训练 (Post-Training)**| SFT 固化协议、RL (PPO/GRPO) 探索策略、RLVP 路径惩罚 | 将能力内化进模型权重 |
-| **09. Agent 持续演进** | 经验知识库、Prompt 动态学习、程序化编译、代码自修复 | 让 Agent 像新人一样越练越熟 |
-| **10. 多 Agent 协作与架构**| 共享/隔离上下文、Manager 模式、Decentralized 模式、A2A | 构建超越个体智力的智能体群体 |
-
----
-
-## 🚀 快速开始
-
-- 📖 进入课程：[第 1 课：从 ReAct 循环到 Harness 生产级架构](/lessons/0001-agent-core-loop)
-- 📑 查阅手册：[Agent 核心架构与设计公式速查](/reference/agent-core-architecture)
-- 🎯 查看学习契约：[我们的学习使命 (MISSION)](/mission)
+<div className={styles.container}>
+  <LandingHero />
+  <LandingFormulas />
+  <LandingCurriculum />
+  <LandingPillars />
+  <LandingFooterCTA />
+</div>

@@ -1,49 +1,268 @@
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* 品牌核心主色：量子翠绿 (Quantum Emerald) - 象征高可靠度与自主运行 */
+  --nextra-primary-hue: 160deg;
+  --nextra-primary-saturation: 84%;
+  --nextra-primary-lightness: 38%;
+
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --muted: #64748b;
+  --muted-bg: #f1f5f9;
+  --card-bg: #ffffff;
+  --card-border: rgba(15, 23, 42, 0.08);
+  --card-border-hover: rgba(16, 185, 129, 0.3);
+  --accent-glow: rgba(16, 185, 129, 0.12);
+
+  --nextra-bg: 248, 250, 252;
+
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark {
+  --nextra-primary-hue: 158deg;
+  --nextra-primary-saturation: 86%;
+  --nextra-primary-lightness: 46%;
+
+  /* 深色背景：黑曜石钛灰深空底色，拒绝死气沉沉的纯黑 */
+  --background: #090d16;
+  --foreground: #f1f5f9;
+  --muted: #94a3b8;
+  --muted-bg: #111726;
+  --card-bg: #0d1322;
+  --card-border: rgba(255, 255, 255, 0.08);
+  --card-border-hover: rgba(52, 211, 153, 0.4);
+  --accent-glow: rgba(16, 185, 129, 0.18);
+
+  --nextra-bg: 9, 13, 22;
 }
 
 html {
-  height: 100%;
-}
-
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
+  scroll-behavior: smooth;
+  text-rendering: optimizeLegibility;
 }
 
 body {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
   color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--background);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  line-height: 1.65;
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
-}
-
-a {
+/* 文本选择高光 */
+::selection {
+  background-color: rgba(16, 185, 129, 0.25);
   color: inherit;
-  text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+/* 键盘可访问性焦点轮廓 */
+:focus-visible {
+  outline: 2px solid hsl(var(--nextra-primary-hue) var(--nextra-primary-saturation) var(--nextra-primary-lightness));
+  outline-offset: 2px;
 }
+
+/* 自定义细腻滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.45);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* Nextra 导航栏毛玻璃与质感 */
+header[class*="nextra-navbar"],
+header.nextra-navbar,
+nav[class*="nextra-navbar"] {
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border-bottom: 1px solid var(--card-border);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+/* Nextra 侧边栏交互与间距 */
+aside[class*="nextra-sidebar"] {
+  font-size: 0.875rem;
+}
+
+aside[class*="nextra-sidebar"] a {
+  border-radius: 6px;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+aside[class*="nextra-sidebar"] a:hover {
+  background-color: var(--muted-bg);
+}
+
+/* 侧边栏当前激活链接：左侧量子绿指示器与高亮微光 */
+aside[class*="nextra-sidebar"] a[aria-current="page"],
+aside[class*="nextra-sidebar"] a[data-active="true"] {
+  font-weight: 600;
+  color: hsl(var(--nextra-primary-hue) var(--nextra-primary-saturation) var(--nextra-primary-lightness)) !important;
+  background-color: rgba(16, 185, 129, 0.08) !important;
+  border-left: 2px solid hsl(var(--nextra-primary-hue) var(--nextra-primary-saturation) var(--nextra-primary-lightness));
+  padding-left: calc(0.75rem - 2px);
+}
+
+/* 优化的 Markdown 核心排版 */
+article.nextra-body,
+main article {
+  /* 由 Nextra 容器自适应分栏，保持与右侧目录及左侧侧边栏的优雅对齐 */
+}
+
+/* 标题紧凑字间距与纵深层次 */
+article h1 {
+  letter-spacing: -0.03em;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+article h2 {
+  letter-spacing: -0.02em;
+  font-weight: 700;
+  margin-top: 2.25rem !important;
+  margin-bottom: 1rem !important;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--card-border);
+}
+
+article h3 {
+  letter-spacing: -0.015em;
+  font-weight: 650;
+  margin-top: 1.75rem !important;
+  margin-bottom: 0.75rem !important;
+}
+
+/* 严谨的引用与说明块 */
+article blockquote {
+  border-left: 3px solid hsl(var(--nextra-primary-hue) var(--nextra-primary-saturation) var(--nextra-primary-lightness)) !important;
+  background: var(--muted-bg);
+  border-radius: 0 8px 8px 0;
+  padding: 0.85rem 1.15rem !important;
+  margin: 1.25rem 0 !important;
+  color: var(--foreground);
+  font-style: normal;
+}
+
+/* 表格现代化：优雅边框、斑马纹与透气单元格 */
+article table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--card-border);
+  margin: 1.5rem 0;
+  font-size: 0.9rem;
+}
+
+article table th {
+  background-color: var(--muted-bg);
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  text-align: left;
+  border-bottom: 1px solid var(--card-border);
+  color: var(--foreground);
+}
+
+article table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--card-border);
+  line-height: 1.55;
+}
+
+article table tr:last-child td {
+  border-bottom: none;
+}
+
+article table tbody tr:hover {
+  background-color: rgba(16, 185, 129, 0.03);
+}
+
+.dark article table tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+/* 内联代码块与代码高亮容器 */
+article code:not(pre code) {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  padding: 0.18em 0.45em;
+  border-radius: 5px;
+  background-color: var(--muted-bg);
+  border: 1px solid var(--card-border);
+  color: hsl(var(--nextra-primary-hue) 70% 35%);
+}
+
+.dark article code:not(pre code) {
+  color: #34d399;
+  background-color: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+/* 代码块容器微阴影 */
+div[data-rehype-pretty-code-fragment],
+div[class*="nextra-code-block"] {
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+}
+
+.dark div[data-rehype-pretty-code-fragment],
+.dark div[class*="nextra-code-block"] {
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Mermaid 架构图自适应排版与防截断保护 */
+div:has(> svg[id*="mermaid"]),
+div:has(> svg[id*="_R_"]),
+.mermaid {
+  display: flex;
+  justify-content: center;
+  overflow-x: auto !important;
+  margin: 1.75rem 0;
+  padding: 0.75rem 0;
+}
+
+svg[id*="mermaid"],
+svg[id*="_R_"],
+.mermaid svg {
+  max-width: 100%;
+  height: auto;
+  overflow: visible !important;
+}
+
+svg[id*="mermaid"] foreignObject,
+svg[id*="_R_"] foreignObject,
+.mermaid foreignObject {
+  overflow: visible !important;
+}
+
+svg[id*="mermaid"] .nodeLabel,
+svg[id*="_R_"] .nodeLabel,
+.mermaid .nodeLabel {
+  line-height: 1.45;
+}
+

@@ -3,6 +3,8 @@ import { Footer, Layout, Navbar, ThemeSwitch } from 'nextra-theme-docs'
 import { Head, Search } from 'nextra/components'
 import { getPageMap } from 'nextra/page-map'
 import 'nextra-theme-docs/style.css'
+import './globals.css'
+import { BrandLogo } from '@/components/BrandLogo'
 
 const baseUrl = 'https://study.ljhboard.cn'
 
@@ -83,11 +85,7 @@ export default async function RootLayout({
 
   const navbar = (
     <Navbar
-      logo={
-        <span>
-          🤖 <b>AI Agent 开发实战</b>
-        </span>
-      }
+      logo={<BrandLogo />}
       projectLink="https://github.com/ljh12138164/ai-agent-study"
     >
       <ThemeSwitch />
@@ -96,11 +94,26 @@ export default async function RootLayout({
 
   const footer = (
     <Footer>
-      AI Agents in Depth © {new Date().getFullYear()} ·{' '}
-      <a href="https://study.ljhboard.cn" target="_blank" rel="noreferrer">
-        study.ljhboard.cn
-      </a>{' '}
-      · Design Principles and Engineering Practice
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', width: '100%' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+          <div>
+            AI Agents in Depth © {new Date().getFullYear()} ·{' '}
+            <a href="https://study.ljhboard.cn" target="_blank" rel="noreferrer" style={{ textDecoration: 'underline', textUnderlineOffset: '3px' }}>
+              study.ljhboard.cn
+            </a>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '0.8125rem' }}>
+            <a href="/reference/agent-core-architecture" style={{ color: 'var(--muted)' }}>速查手册</a>
+            <span>·</span>
+            <a href="/mission" style={{ color: 'var(--muted)' }}>学习契约</a>
+            <span>·</span>
+            <a href="https://github.com/ljh12138164/ai-agent-study" target="_blank" rel="noreferrer" style={{ color: 'var(--muted)' }}>GitHub</a>
+          </div>
+        </div>
+        <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+          Design Principles and Engineering Practice · 基于李博杰著作打造的生产级大模型智能体深度实战
+        </div>
+      </div>
     </Footer>
   )
 

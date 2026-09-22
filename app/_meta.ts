@@ -1,7 +1,18 @@
 import type { MetaRecord } from 'nextra'
 
 const meta: MetaRecord = {
-  index: '课程导读 (Overview)',
+  index: {
+    title: '课程导读 (Overview)',
+    type: 'page',
+    theme: {
+      layout: 'full',
+      sidebar: false,
+      toc: false,
+      pagination: false,
+      copyPage: false,
+      timestamp: false,
+    },
+  },
   'ch01-fundamentals': '第 1 章：Agent 基础与架构',
   'ch02-context': '第 2 章：Context 上下文工程',
   'ch03-memory-rag': '第 3 章：用户记忆与知识库',

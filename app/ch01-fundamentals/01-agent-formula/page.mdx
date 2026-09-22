@@ -15,14 +15,14 @@ import { Quiz } from '@/components/Quiz'
 这个公式可以在三个不同层次进行精准映射：
 
 ```mermaid
-graph TD
-    subgraph Conceptual["三层认知视角"]
+flowchart TD
+    subgraph Conceptual["现代 Agent 统一公式的三层认知视角"]
         direction TB
-        L1["实现层 (Implementation): LLM + Context + Tools"]
-        L2["直觉层 (Intuition): 大脑 (Brain) + 眼睛 (Eyes) + 手脚 (Hands & Feet)"]
-        L3["学术层 (RL Concept): 策略 (Policy) + 观测空间 (Observation) + 动作空间 (Action)"]
-        L1 --- L2
-        L2 --- L3
+        L1["<b>实现层 (Implementation)</b><br/>LLM (思考引擎) + Context (工作上下文) + Tools (行动接口)"]
+        L2["<b>直觉层 (Intuition)</b><br/>大脑 (Brain) + 眼睛 (Eyes) + 手脚 (Hands & Feet)"]
+        L3["<b>学术层 (RL Concept)</b><br/>策略 (Policy π) + 观测空间 (Observation) + 动作空间 (Action)"]
+        L1 --> L2
+        L2 --> L3
     end
 ```
 
@@ -53,19 +53,19 @@ flowchart LR
 ### 经典案例剖析：Manus 与 OpenClaw 的空间跃迁
 
 ```mermaid
-graph TD
+flowchart TD
     subgraph Early["早期 Agent 孤岛"]
-        A1[Deep Research: 检索空间]
-        A2[Coding Agent: 终端/文件空间]
-        A3[Computer Use: 屏幕像素空间]
+        A1["<b>Deep Research</b><br/>检索与网络空间"]
+        A2["<b>Coding Agent</b><br/>终端与代码空间"]
+        A3["<b>Computer Use</b><br/>屏幕与像素空间"]
     end
 
     subgraph Manus["Manus: 三界合一"]
-        M[统一大动作空间: 虚拟浏览器 + 文件系统 + 代码执行沙箱]
+        M["<b>统一大动作空间</b><br/>虚拟浏览器 + 持久文件系统 + 代码沙箱"]
     end
 
     subgraph OpenClaw["OpenClaw: 进驻用户真实数字生活"]
-        OC[多渠道网关 IM/Slack + 本地网关 + 云端驱动 Google Drive/Notion]
+        OC["<b>全域通信与环境集成</b><br/>IM/Slack 网关 + 本地守护 + 云端驱动"]
     end
 
     Early -->|空间并集| Manus
@@ -89,12 +89,13 @@ graph TD
 > **Harness 工程不是抗拒 Bitter Lesson，而是在工程的时间尺度上践行它！**
 
 ```mermaid
-timeline
-    title 模型的吞噬与 Harness 的迁移前沿
-    过去 : Few-shot 与提示技巧 : 被指令微调与推理模型内置
-    近处 : 工具调用协议与格式修复 : 被原生 Tool Calling 与结构化输出内置
-    当前 : 浏览器操作与中断交互 : 正在被多模态与全双工模型内置
-    未来 : Harness 继续后退 : 迁移至企业级专属安全、动态审计与复杂业务兜底
+flowchart LR
+    P1["<b>阶段 1 · 早期历史</b><br/>Few-shot 与提示技巧<br/>↳ <i>被指令微调与推理模型内置</i>"]
+    P2["<b>阶段 2 · 近期演进</b><br/>工具调用协议与格式修复<br/>↳ <i>被原生 Function Calling 内置</i>"]
+    P3["<b>阶段 3 · 当前前沿</b><br/>浏览器操作与中断交互<br/>↳ <i>正在被多模态与全双工内置</i>"]
+    P4["<b>阶段 4 · 未来演进</b><br/>Harness 持续后退迁移<br/>↳ <i>专注私有安全、审计与复杂兜底</i>"]
+
+    P1 --> P2 --> P3 --> P4
 ```
 
 大模型的训练周期通常以月甚至年为单位，没有任何模型能在出厂时内化所有特定企业的业务边界与私有安全规范。**模型的当前能力边界，正是 Harness 产生价值的黄金地带。** 模型每内化一层，Harness 就卸下一层，转而去托举下一个全新的能力前沿。
