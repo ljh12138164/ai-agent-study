@@ -2,137 +2,124 @@ import { Quiz } from '@/components/Quiz'
 
 # 1.1 现代 Agent 核心公式与概念边界
 
-> **本节要点**：跳出表层概念，从系统论与强化学习两个视角彻底理解 Agent 的本质；掌握观测空间（Observation Space）与动作空间（Action Space）如何决定 Agent 能力上限；剖析 Manus 与 OpenClaw 的架构演进逻辑。
+> 很多人以为做 Agent 就是找个强模型、写一段很长的 Prompt。但实际做项目时你会发现：模型往往不是不聪明，而是根本摸不到现场。这一节我们聊聊 Agent 的底层拆解，以及为什么扩充接口比调整提示词管用得多。
 
 ---
 
-## 1. 核心公式的三层理解
+## 1. 核心公式：拆开看它到底由什么组成
 
-《AI Agents in Depth》开篇给出了现代 Agent 的统一公式：
+李博杰在《AI Agents in Depth》里把 Agent 概括成一个极简公式：
 
-> **Agent = LLM (大型语言模型) + Context (工作上下文) + Tools (工具接口)**
+> **Agent = 大模型 (LLM) + 上下文 (Context) + 工具集 (Tools)**
 
-这个公式可以在三个不同层次进行精准映射：
-
-```mermaid
-flowchart TD
-    subgraph Conceptual["现代 Agent 统一公式的三层认知视角"]
-        direction TB
-        L1["<b>实现层 (Implementation)</b><br/>LLM (思考引擎) + Context (工作上下文) + Tools (行动接口)"]
-        L2["<b>直觉层 (Intuition)</b><br/>大脑 (Brain) + 眼睛 (Eyes) + 手脚 (Hands & Feet)"]
-        L3["<b>学术层 (RL Concept)</b><br/>策略 (Policy π) + 观测空间 (Observation) + 动作空间 (Action)"]
-        L1 --> L2
-        L2 --> L3
-    end
-```
-
-| 视角 | 思考引擎 (LLM) | 工作上下文 (Context) | 行动接口 (Tools) |
-| :--- | :--- | :--- | :--- |
-| **直觉层** | **大脑 (Brain)**：负责理解意图、常识推理、生成规划、做出决策。 | **眼睛 (Eyes)**：决定 Agent 在当前这一刻“能看见什么”（环境状态、历史记录、工具定义）。 | **手脚 (Hands & Feet)**：决定 Agent “能对外部世界做什么”（搜索、读写文件、调 API、发消息）。 |
-| **强化学习层** | **策略 (Policy π)**：在给定当前信息时，决定“下一步采取什么行动”的概率分布。 | **内部观测 (Observation)**：将环境信息结构化组织为供策略计算的内部表征。 | **动作空间 (Action Space A)**：Agent 在环境中可合法执行的动作定义集合。 |
+抛开那些复杂的学术术语，用全栈开发的视角看，这三者其实就是一套标准的状态机与外部系统：
 
 ```mermaid
 flowchart LR
-    subgraph Agent["智能体 (Agent 边界内部)"]
-        Context["Context (内部观测历史)"] --> LLM["LLM (推理策略 Policy)"]
-        LLM --> Tools["Tools (动作接口 Action)"]
+    subgraph AgentRuntime["Agent 运行时"]
+        Context["Context 上下文<br/>(只读状态：消息历史 + 工具返回值)"] --> LLM["LLM 概率引擎<br/>(根据当前字符串预测下一个 Token)"]
+        LLM --> Tools["Tools 工具层<br/>(外部副作用函数：文件读写 / HTTP / 沙箱)"]
     end
     
-    Tools -->|Action 操作| Env["外部环境 (Environment)<br/>文件系统 / 数据库 / Web / 用户"]
-    Env -->|Observation 反馈| Context
+    Tools -->|执行并拿到结果| Env["外部环境 (本地系统 / 数据库 / Web)"]
+    Env -->|回填为 tool 结果| Context
 ```
+
+* **大模型（LLM）**：负责根据传入的文本，预测接下来该输出普通回答还是发起工具调用。它没有独立常驻内存，每次调用都是纯函数式的无状态计算。
+* **上下文（Context）**：相当于传给当前函数的 Payload。它决定了模型这一秒能获取什么信息。如果报错信息没塞进上下文，模型就算有再高的常识也只能靠猜。
+* **工具集（Tools）**：暴露给模型的外部接口。模型想改文件、查数据库、发起网络请求，都必须通过这层函数声明派发出去。
 
 ---
 
-## 2. 系统工程的第一杠杆：重定义观测与动作空间
+## 2. 为什么扩充接口比优化 Prompt 更管用？
 
-当底座模型固定时，**提升 Agent 能力最有效的系统工程杠杆，往往不是去写更长更花哨的提示词，而是重新定义或扩展其“观测空间”与“动作空间”**。
+不少人刚开始做 Agent 时容易陷入一个误区：任务跑不通，就不断在 Prompt 里追加催促词：“请你务必仔细检查”、“请严格按照真实情况回答”。
 
-很多看起来需要“更聪明模型”才能解决的难题，本质上都是接口与感知问题：把任务相关的数据带进 Context，或者把所需的操作封装成一个工具，原本不可解的任务往往迎刃而解。
+但现实很残酷：**信息缺失的问题，无法通过提高态度来解决。**
 
-### 经典案例剖析：Manus 与 OpenClaw 的空间跃迁
+比如让 Agent 去排查一个前端组件点击没反应的 Bug。如果它只能读代码仓库，它很可能会花几个小时去瞎猜是不是 CSS `z-index` 遮挡了，或者逻辑写错了。但如果你给它配两个具体的工具：
+1. `get_browser_console_errors()`：拉取浏览器实时的报错日志；
+2. `inspect_dom_node(selector)`：抓取当前节点的实际样式与绑定的事件。
+
+它拿到第一手运行报错，几秒钟就能定位是接口返回了 403。
+
+### 从 Manus 到生产级 Agent 的演进
+
+2024 年底引发讨论的 Manus，核心技术突破并非来自凭空训练出了超越头部厂商的模型，而是系统工程上的整合：
 
 ```mermaid
 flowchart TD
-    subgraph Early["早期 Agent 孤岛"]
-        A1["<b>Deep Research</b><br/>检索与网络空间"]
-        A2["<b>Coding Agent</b><br/>终端与代码空间"]
-        A3["<b>Computer Use</b><br/>屏幕与像素空间"]
+    subgraph Isolated["过去常见的单点 Agent"]
+        A1["搜索 Agent (只负责抓网页)"]
+        A2["代码 Agent (只负责跑命令行)"]
+        A3["操作 Agent (只负责点击屏幕)"]
     end
 
-    subgraph Manus["Manus: 三界合一"]
-        M["<b>统一大动作空间</b><br/>虚拟浏览器 + 持久文件系统 + 代码沙箱"]
+    subgraph Integrated["Manus 类全功能运行时"]
+        M["整合运行环境<br/>无头浏览器 + 本地沙箱 + 持久化文件系统"]
     end
 
-    subgraph OpenClaw["OpenClaw: 进驻用户真实数字生活"]
-        OC["<b>全域通信与环境集成</b><br/>IM/Slack 网关 + 本地守护 + 云端驱动"]
-    end
-
-    Early -->|空间并集| Manus
-    Manus -->|外延至本地与全域通信| OpenClaw
+    Isolated -->|统一接入同一个循环| Integrated
 ```
 
-1.  **Manus（空间的并集）**：
-    在 Manus 之前，行业将 Agent 分割在三条独立赛道：深度研究（Deep Research）、代码生成（Coding）与电脑操作（Computer Use）。Manus 并非靠换上一个新模型而脱颖而出，而是**将这三者的观测空间与动作空间取了并集**——赋予模型虚拟浏览器、持久化文件系统与代码执行器，让单体 Agent 跨越了原本的产品边界。
-2.  **OpenClaw（向外拓展到用户真实生活）**：
-    OpenClaw 进一步将交互界面延伸到用户现有的即时通信软件（WhatsApp, Telegram, Slack, iMessage）中，并将本地网关与云端文档打通。散落在不同设备和云端的数据首次进入了同一个 Agent 的观测空间。
+过去做产品往往各玩各的：做搜索的只给搜索接口，做代码的只给终端。Manus 把**浏览器操作、Linux 容器执行、本地文件读写**统统挂在同一个 Agent 身上。模型手脚齐备之后，原本需要多套系统切来切去的复杂任务，就能在一个循环里自主串联了。
 
 ---
 
-## 3. Sutton 的“苦涩的教训”与 Harness 的使命
+## 3. 模型越来越强，我们的外部工程代码会被淘汰吗？
 
-强化学习之父、图灵奖得主 Richard Sutton 在著名文章《The Bitter Lesson（苦涩的教训）》中回顾了 70 年 AI 史：**凡是试图将人类专家经验硬编码进系统的做法，短期或许有效，但长期必然败给利用算力做通用搜索与学习的方法。**
+强化学习学者 Richard Sutton 在著名的《The Bitter Lesson（苦涩的教训）》中提到：AI 历史上那些试图靠人类手工编写专家规则的做法，最终都会被更通用的算力和模型学习所取代。
 
-这引发了一个尖锐的问题：**如果模型未来越来越强，我们今天围绕它写的这套 Harness（缰绳系统）最终会被模型吞噬淘汰吗？**
+这就带出一个很现实的工程疑问：**未来基础大模型如果越来越聪明，我们现在写的这一大堆上下文拼接、输入检查、工具兜底代码（Harness），还有存在的必要吗？**
 
-《AI Agents in Depth》给出的回答是：
-> **Harness 工程不是抗拒 Bitter Lesson，而是在工程的时间尺度上践行它！**
+答案很明确：**模型负责常识推理，Harness 负责把控业务边界与确定性。**
 
 ```mermaid
 flowchart LR
-    P1["<b>阶段 1 · 早期历史</b><br/>Few-shot 与提示技巧<br/>↳ <i>被指令微调与推理模型内置</i>"]
-    P2["<b>阶段 2 · 近期演进</b><br/>工具调用协议与格式修复<br/>↳ <i>被原生 Function Calling 内置</i>"]
-    P3["<b>阶段 3 · 当前前沿</b><br/>浏览器操作与中断交互<br/>↳ <i>正在被多模态与全双工内置</i>"]
-    P4["<b>阶段 4 · 未来演进</b><br/>Harness 持续后退迁移<br/>↳ <i>专注私有安全、审计与复杂兜底</i>"]
-
-    P1 --> P2 --> P3 --> P4
+    P1["早期提示技巧<br/>(Few-shot / 格式修正)"] -->|被原生能力吸收| P2["标准化工具协议<br/>(Function Calling)"]
+    P2 -->|模型逐步原生支持| P3["私有安全与业务防御<br/>(沙箱隔离 / 敏感操作拦截 / 熔断)"]
 ```
 
-大模型的训练周期通常以月甚至年为单位，没有任何模型能在出厂时内化所有特定企业的业务边界与私有安全规范。**模型的当前能力边界，正是 Harness 产生价值的黄金地带。** 模型每内化一层，Harness 就卸下一层，转而去托举下一个全新的能力前沿。
+基础模型可以把通用语言理解、逻辑推导甚至多步骤调用练得很纯熟，但任何通用的出厂模型都无法预知：
+* 你的哪台生产服务器绝对不能执行 `rm -rf`；
+* 哪些数据库字段属于合规审计中的机密数据；
+* 当外部第三方 API 超时返回 502 时该如何向用户做平滑降级。
+
+模型的通用能力每往前走一步，外层框架就可以卸下一层繁琐的格式胶水代码，把精力集中在真正的企业安全边界、权限控制与生产级验证上。
 
 ---
 
-## 4. 随堂巩固自测
+## 4. 随堂检验
 
 <Quiz
-  question="根据《AI Agents in Depth》的论述，当底座大模型固定且任务解决率较低时，最有效的系统工程改进杠杆通常是什么？"
+  question="开发一个代码排障 Agent 时，如果模型总是凭空捏造不存在的函数调用导致执行失败，最有效的工程手段通常是什么？"
   options={[
     {
-      text: "A. 在系统提示词中无限制地添加更多修饰性的形容词和催促模型认真思考的提示",
+      text: "A. 在 Prompt 里反复用感叹号警告模型绝对不要伪造代码",
       isCorrect: false,
-      explanation: "口头修饰属于表面提示词工程，无法弥补系统感知信息的缺失或操作接口的物理匮乏。"
+      explanation: "口头强调对上下文缺失无法起效，在长对话中极容易被模型忽略。"
     },
     {
-      text: "B. 重新审视并拓展 Agent 的观测空间与动作空间补充关键上下文或提供必要工具",
+      text: "B. 提供代码符号检索工具并把真实项目结构作为初始上下文传入",
       isCorrect: true,
-      explanation: "系统工程的第一杠杆是接口重构：将不可见的信息带入 Context，将不可操作的动作封装为 Tool。"
+      explanation: "幻觉多数源于环境感知缺失，给模型提供真实的代码检索手脚能直接阻断瞎猜。"
     },
     {
-      text: "C. 立即更换算法并要求模型在没有任何辅助工具的情况下纯靠内部思考输出结果",
+      text: "C. 关掉工具调用能力，让模型一次性在对话里输出所有解决方案",
       isCorrect: false,
-      explanation: "大模型存在幻觉且缺少与现实世界的交互能力，封闭在无工具状态下无法解决环境交互任务。"
+      explanation: "不运行验证就无法形成反馈闭环，排障需要依赖真实的执行与报错反馈。"
     },
     {
-      text: "D. 放弃当前工程方案等待数年后更强大的通用基础大模型出厂自动解决该业务问题",
+      text: "D. 换用体量更小的轻量模型来减少思考过程中的随机发散",
       isCorrect: false,
-      explanation: "企业私有规范和动态环境永远不可能完全在出厂模型中预置，Harness 工程正是当下的核心壁垒。"
+      explanation: "小模型在复杂指令遵循和长上下文把握上通常更脆弱，无法根治接口缺失。"
     }
   ]}
 />
 
 ---
 
-## 📚 权威拓展与延伸阅读
+## 延伸阅读
 
-*   📖 **教材章节**：《AI Agents in Depth: Design Principles and Engineering Practice》（李博杰，2026）第 1 章第 1.1 节。
-*   ➡️ **下一节**：[1.2 ReAct 循环与上下文消融实验](/ch01-fundamentals/02-react-loop-and-ablation)
+* 《AI Agents in Depth: Design Principles and Engineering Practice》（李博杰，2026）第 1.1 节。
+* 下一节：[1.2 ReAct 循环与上下文消融实验](/ch01-fundamentals/02-react-loop-and-ablation)

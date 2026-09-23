@@ -2,43 +2,37 @@ import { Quiz } from '@/components/Quiz'
 
 # 2.1 上下文能力底座与 API 消息结构
 
-> **本节要点**：理解为什么 Context 是决定 Agent 实际能力的根本要素；掌握大模型 API 协议层四大消息角色（System, User, Assistant, Tool）的分工与生命周期；透视多轮工具调用的底层消息流转与 `tool_call_id` 强关联机制。
+> 同样一个大模型，你在网页端用觉得它很聪明，接进公司内部系统却发现它净说胡话。区别不在模型本身，而在你给它喂了什么上下文。这一节我们聊聊大模型 API 真正接收的消息格式，以及多轮工具调用时消息是怎样在背后流转的。
 
 ---
 
-## 1. 为什么说 Context 决定了 Agent 的能力？
+## 1. 为什么说上下文才是 Agent 的天花板？
 
-在标准评测榜单上表现优异的基础大模型，放到具体企业场景中却常常跌跌撞撞。原因在于：**具体的业务工作依赖大量高度情境化的隐性知识（Tacit Knowledge）**。
+新入行的工程师最容易抱怨大模型“不通人性”：比如让它“把用户登录的 Bug 修一下”，它改了半天，把加密方式给改崩了。
 
-以 Coding Agent 为例，一次成功的“帮我修个 Bug”指令，模型需要以下三大核心上下文：
+但这真的怪模型吗？它根本不知道：
+* 你们团队的代码目录哪块是废弃的旧逻辑，哪块才是线上运行的核心；
+* 你们的 Git 提交必须挂上 Jira ID，测试必须通过 ESLint 才能合入；
+* 线上数据库到底长什么样、测试环境的连通账号是什么。
 
-```mermaid
-graph TD
-    subgraph Contexts["Agent 所需的三大基石上下文"]
-        C1["代码上下文 (Code Context)<br/>目录拓扑、模块职责、核心数据结构、团队代码规范"]
-        C2["流程上下文 (Process Requirements)<br/>Git 分支规范、Commit 格式要求、测试准入与 CI 门禁"]
-        C3["环境上下文 (Environment Config)<br/>开发环境、测试数据库连通串、构建脚本、API 密钥"]
-    end
-```
+OpenAI 研究员翁家翌讲过一段非常实在的话：**“如果在公司里别人拥有和我完全一样的 Context，他们也能做我的工作。团队协作最本质的障碍，就是信息不对齐。”**
 
-> 💬 **OpenAI 资深研究员翁家翌**：“对人和对模型来说，最重要的都是 Context。如果在 OpenAI 别人拥有我所有的 Context，他们也能做我的工作。团队协作最核心的矛盾，就是上下文的不一致。”
-
-因此，**团队的软件工程素养与文档透明度，直接决定了其 AI-Native 的上限**。那些适合远程异步协作的优秀开源社区（如 Linux 内核维护），其讨论公开、决策留痕、架构文档化，天然为 Agent 提供了完美的上下文培养基。
+对 Agent 也是一样。一个平时技术文档健全、代码结构清晰、目录规范透明的项目，Agent 接进去就能直接跑；而在一个到处靠口头传授、没有一份像样 README 的屎山项目里，哪怕换用再贵的模型也寸步难行。
 
 ---
 
-## 2. API 协议层：四大消息角色与工具定义
+## 2. API 协议层：消息数组到底长什么样？
 
-Chat Completions 风格的无状态 API，通过 `messages` 数组和顶层的 `tools` 字段传递所有上下文：
+主流大模型 API（如 OpenAI、Anthropic、DeepSeek）全是基于无状态的 JSON 报文进行通信的。每一轮请求的核心字段就两个：`messages` 数组和 `tools` 列表。
 
 ```mermaid
 flowchart TD
-    subgraph Request["一次完整的 API 请求上下文 (Context)"]
-        SP["1. system: 开发者编写的角色/规则/SOP (静态前缀)"]
-        TD["2. tools 声明: 可调用的工具名、描述与参数规范 (静态前缀)"]
-        UM["3. user: 用户的提问或最新任务输入 (动态追加)"]
-        AM["4. assistant: 模型此前的思考链与工具调用指令 (动态追加)"]
-        TR["5. tool: 外部环境执行工具返回的真实数据 (动态追加)"]
+    subgraph Request["发送给 API 的消息结构"]
+        SP["1. system 消息: 系统的基础规矩与角色定义 (固定在最前)"]
+        TD["2. tools 声明: 允许调用的函数名字、描述与参数类型 (固定在最前)"]
+        UM["3. user 消息: 用户的指令或追加输入"]
+        AM["4. assistant 消息: 模型的回答文本或 tool_calls 调用指令"]
+        TR["5. tool 消息: 本地程序执行工具后拿到的返回数据"]
     end
 
     SP --- TD
@@ -47,102 +41,141 @@ flowchart TD
     AM --- TR
 ```
 
-### 多轮工具调用的 API 请求报文全貌
+### 看一个真实的多工具调用报文
 
-假设用户询问：“温哥华当前的时间和天气如何？”：
+用户提问：“查一下温哥华现在的时间和天气”。
+
+#### 第 1 步：宿主程序向模型发起初始请求
 
 ```json
-// ── 第 1 次 API 请求（Agent 框架发送） ──
 {
-  "model": "Qwen3-0.6B",
+  "model": "gpt-4o",
   "messages": [
-    { "role": "system", "content": "You are a helpful assistant..." },
-    { "role": "user", "content": "What's the current time and weather in Vancouver?" }
+    { "role": "system", "content": "你是一个严谨的生活助手。" },
+    { "role": "user", "content": "查一下温哥华现在的时间和天气。" }
   ],
   "tools": [
     {
       "type": "function",
       "function": {
         "name": "get_current_time",
-        "description": "Get current time in timezone",
-        "parameters": { "type": "object", "properties": { "timezone": { "type": "string" } } }
+        "description": "获取指定时区的当前时间",
+        "parameters": {
+          "type": "object",
+          "properties": { "timezone": { "type": "string" } },
+          "required": ["timezone"]
+        }
       }
     },
     {
       "type": "function",
       "function": {
         "name": "get_weather",
-        "description": "Get weather for city",
-        "parameters": { "type": "object", "properties": { "city": { "type": "string" } } }
+        "description": "查询城市的实时天气",
+        "parameters": {
+          "type": "object",
+          "properties": { "city": { "type": "string" } },
+          "required": ["city"]
+        }
       }
     }
   ]
 }
 ```
 
-模型分析后，识别出两个独立的子任务，在单次响应中并发下发两个工具调用：
+#### 第 2 步：模型返回工具调用指令（并发下发）
+
+大模型分析后，发现必须调两个接口才能回答，于是一次性返回两个 `tool_calls`：
 
 ```json
-// ── 第 1 次模型响应（返回两个 tool_calls） ──
 {
   "role": "assistant",
   "content": null,
   "tool_calls": [
-    { "id": "call_123", "function": { "name": "get_current_time", "arguments": "{\"timezone\":\"America/Vancouver\"}" } },
-    { "id": "call_456", "function": { "name": "get_weather", "arguments": "{\"city\":\"Vancouver\"}" } }
+    {
+      "id": "call_001",
+      "type": "function",
+      "function": {
+        "name": "get_current_time",
+        "arguments": "{\"timezone\":\"America/Vancouver\"}"
+      }
+    },
+    {
+      "id": "call_002",
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "arguments": "{\"city\":\"Vancouver\"}"
+      }
+    }
   ]
 }
 ```
 
-框架并行执行这两个工具，将输出原样追加为 `role: "tool"` 消息发起第 2 次请求：
+#### 第 3 步：宿主程序执行并回填结果
+
+外层代码并行发起本地函数调用，将拿到的返回值用 `role: "tool"` 拼入消息末尾，再次发送：
 
 ```json
-// ── 第 2 次 API 请求（携带全部历史与工具结果） ──
 {
-  "model": "Qwen3-0.6B",
+  "model": "gpt-4o",
   "messages": [
-    { "role": "system", "content": "..." },
-    { "role": "user", "content": "What's the current time and weather in Vancouver?" },
-    { "role": "assistant", "content": null, "tool_calls": [ ... ] },
-    { "role": "tool", "tool_call_id": "call_123", "content": "{\"datetime\":\"2026-09-21T07:30:00\"}" },
-    { "role": "tool", "tool_call_id": "call_456", "content": "{\"temp\":18,\"condition\":\"Clear\"}" }
+    { "role": "system", "content": "你是一个严谨的生活助手。" },
+    { "role": "user", "content": "查一下温哥华现在的时间和天气。" },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [ ... ] // 必须把上一轮模型返回的调用原样放回！
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_001",
+      "content": "{\"datetime\":\"2026-09-22T08:00:00-07:00\"}"
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_002",
+      "content": "{\"temperature\": 18, \"condition\": \"晴\"}"
+    }
   ]
 }
 ```
+
+> **注意**：`tool_call_id` 是模型把执行结果与上一轮调用对齐的唯一标识。如果写错或漏传，模型不知道这串数据属于谁，API 会直接拒绝处理。
 
 ---
 
-## 3. 随堂巩固自测
+## 3. 随堂检验
 
 <Quiz
-  question="在向大模型 API 回传工具执行结果时，为什么必须严格使用 role: 'tool' 并附带 tool_call_id，而不能把结果包装成普通 user 消息直接回传？"
+  question="向大模型回传工具执行结果时，为什么必须严格使用 role: 'tool' 并带上 tool_call_id，而不能把结果包装成普通 user 消息发回去？"
   options={[
     {
-      text: "A. 仅仅是各家商业公司强制推行的计费标记如果不带该字段就会被扣除双倍费用",
+      text: "A. 因为包装成 user 消息会被大模型服务商按双倍单价计费",
       isCorrect: false,
-      explanation: "role 与 ID 是标准协议语义定义，与各家云厂商的计费策略无关。"
+      explanation: "服务商计费看的是总 Token 数量，与具体的消息 role 标签无关。"
     },
     {
-      text: "B. 让模型训练好的 Chat Template 能正确匹配调用关系并防止思维链重置与混淆",
+      text: "B. 保持底座模型 Chat Template 的上下文对齐，防止推理逻辑被切断",
       isCorrect: true,
-      explanation: "标准角色与 ID 保证了底层 Token 序列能准确对齐工具调用关系。若伪装为 user 消息，模型的 Chat Template 会误以为开启了新话题而重置思维链甚至造成格式错误。"
+      explanation: "标准协议里 tool 角色与 ID 是一一对应的闭环。如果改成 user 消息，模型会误以为用户插入了新对话，导致刚才的思考过程被重置或格式报错。"
     },
     {
-      text: "C. 因为底层的网络传输层 TCP/IP 协议只支持 tool 角色不支持其它字符串数据传输",
+      text: "C. 底层网络通信协议只允许传输 tool 标签的内容",
       isCorrect: false,
-      explanation: "传输层只负责传输字节流，消息的角色与参数属于最上层的应用层协议约束。"
+      explanation: "HTTP 和 TCP 只负责传输通用字节，这是应用层的 JSON 协议约定。"
     },
     {
-      text: "D. 这样可以使模型自动具备将所有返回结果立刻自动持久化到本地磁盘硬盘的能力",
+      text: "D. 这样模型才能自动把数据直接写入到开发者的本地硬盘上",
       isCorrect: false,
-      explanation: "持久化由外层框架（Harness）代码控制，模型本身并没有直接操作底层硬件存储的能力。"
+      explanation: "模型返回的都是文本，把数据写进磁盘完全靠外层程序执行。"
     }
   ]}
 />
 
 ---
 
-## 📚 权威拓展与延伸阅读
+## 延伸阅读
 
-*   📖 **教材章节**：《AI Agents in Depth: Design Principles and Engineering Practice》（李博杰，2026）第 2 章第 2.1 与 2.2 节。
-*   ➡️ **下一节**：[2.2 KV Cache 机制与缓存友好设计](/ch02-context/02-kv-cache-optimization)
+* 《AI Agents in Depth: Design Principles and Engineering Practice》（李博杰，2026）第 2.1 与 2.2 节。
+* 下一节：[2.2 KV Cache 机制与缓存友好设计](/ch02-context/02-kv-cache-optimization)

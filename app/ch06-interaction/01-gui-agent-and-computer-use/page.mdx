@@ -2,174 +2,116 @@ import { Quiz } from '@/components/Quiz'
 
 # 6.1 GUI 智能体与 Computer Use：视觉像素与 DOM 双模定位
 
-> **本节要点**：突破纯文本与 API 接口的藩篱，让 Agent 像人类一样通过屏幕（GUI）操纵软件与网页。深度解密两代 GUI 交互范式：**基于 DOM/Accessibility Tree 的结构化定位** 与 **基于像素截屏的纯视觉定位（Anthropic Computer Use）**；掌握 **Set-of-Marks (SoM)** 视觉提示标记法；构建兼顾精确度与通用性的工业级双模调度架构。
+> 理想情况下，所有系统都应该有现成的开放 API。但现实很骨感：公司里用了十几年的老财务软件、进销存后台或者特定的桌面客户端，**压根没有提供任何 API 接口**。要想让 Agent 接手这些繁琐流程，它就必须学会“看懂显示器屏幕”并“操控鼠标键盘”。这一节我们看懂 GUI Agent 是怎么在屏幕上找按钮的，以及为什么给按钮贴数字标签（Set-of-Marks）能让点击准确率从 60% 飙升到 90% 以上。
 
 ---
 
-## 1. 终极人机界面：为什么需要 GUI 智能体？
+## 1. 怎么在屏幕上找按钮？两套截然不同的路线
 
-在理想世界中，所有软件都应该提供完善、安全且免费的 RESTful API 或 MCP 接口。
-然而在现实物理世界中：
-* 绝大多数企业内部 ERP、传统财务系统和桌面端软件（如 Photoshop、Excel 宏插件）**根本没有开放任何 API**；
-* 互联网上海量的商业网站为了反爬虫与安全风控，频繁变更接口签名；
-* 人类在数字世界中 90% 的生产力都是通过**图形用户界面（GUI，鼠标点击、滚动、键盘输入）**完成的。
-
-**GUI Agent（界面智能体）** 的核心使命，就是赋予大模型“看懂显示器屏幕”并“操控键盘鼠标”的能力，从而无缝兼容人类历史上遗留的所有软件遗产。
+工业界在定位界面元素时，主要有两条技术路线：
 
 ```mermaid
-graph LR
-    Screen["显示器屏幕 / 浏览器视窗"] --> Perceiver["感知层 (Vision / Accessibility Tree)"]
-    Perceiver --> Decision["Agent 决策中枢 (Multimodal LLM)"]
-    Decision --> Action["动作原语 (Mouse Move, Click, Type, Scroll)"]
-    Action --> OS["操作系统 / 浏览器渲染引擎"]
-    OS --> Screen
-```
-
----
-
-## 2. 两代 GUI 定位技术路线深度对比
-
-在如何定位界面元素（如“登录按钮”）的技术路线上，工业界分裂为两大派系：
-
-```mermaid
-graph TD
-    subgraph RouteDOM["路线 A: 结构化 DOM / 可访问性树 (Accessibility Tree)"]
-        D1["提取 HTML / Chromium Accessibility Snapshot"]
-        D2["过滤无关节点，保留交互元素 ID 与坐标"]
-        D3["通过 Playwright / CDP 直接触发 selector 点击"]
-        D1 --> D2 --> D3
+flowchart TD
+    subgraph RouteA["路线 A · 读结构树 (DOM / Accessibility Tree)"]
+        A1["抓取网页的 HTML 结构或浏览器的可访问性节点"]
+        A2["用 Playwright 等工具按选择器（Selector）点击唯一 ID"]
+        A3["优势: 点得奇准无比，绝不点偏<br/>致命短板: 只能在浏览器里用，对原生桌面软件完全失效"]
     end
-    
-    subgraph RouteVision["路线 B: 端到端纯视觉像素定位 (Vision-based Computer Use)"]
-        V1["截取当前屏幕的高清 RGB 图像 (Screenshot)"]
-        V2["多模态大模型直接预测目标像素坐标 [x, y]"]
-        V3["操作系统底层驱动发送真实硬件鼠标移动与按压"]
-        V1 --> V2 --> V3
+
+    subgraph RouteB["路线 B · 看截图像素 (Computer Use)"]
+        B1["直接截取桌面高清屏幕图片 (PNG)"]
+        B2["多模态模型直接预测目标按钮的屏幕像素坐标 [x, y]"]
+        B3["优势: 通吃所有软件，不管是 Photoshop 还是老旧 ERP<br/>致命短板: 坐标容易‘发飘’，偶尔偏几像素点空"]
     end
 ```
 
-| 评估维度 | 路线 A：结构化 DOM / A11y 树 | 路线 B：纯视觉像素定位 (Computer Use) |
+| 维度 | 路线 A：读 DOM / 辅助功能树 | 路线 B：看截图像素 (Computer Use) |
 | :--- | :--- | :--- |
-| **代表方案** | Playwright, Browserbase, Puppeteer | Anthropic Claude 3.5 Computer Use, UI-TARS |
-| **感知输入** | 精简后的 DOM 树或 A11y JSON 文本 | 屏幕截屏图片 (PNG/JPEG) |
-| **定位精度** | **100% 精确**（直接绑定 DOM 节点唯一 ID） | 依赖像素坐标预测（可能出现 5~10 像素偏移） |
-| **跨软件通用性** | 极差（仅局限于 Web 浏览器与部分 Electron 应用） | **全能通用**（支持 Windows/macOS/Linux 原生桌面软件） |
-| **Token 消耗** | 较多（长网页 DOM 树动辄消耗几万 Token） | 固定图片 Token（约 800~1600 Tokens/帧） |
-| **抗反爬与遮挡** | 容易被 Canvas、反爬框架和复杂 Shadow DOM 欺骗 | 与人类所见完全一致，天然免疫 DOM 混淆 |
+| **代表方案** | Playwright, Puppeteer | Anthropic Claude 3.5 Computer Use |
+| **输入格式** | 提取出的 HTML 字符串或 JSON 节点树 | 一张屏幕截屏图像 |
+| **点击精度** | **100% 精确**（直接绑定元素节点） | 靠坐标估算（偶发有 5~10 像素偏移） |
+| **通用程度** | 较差（仅限 Web 网页与部分 Electron 应用） | **全能通用**（所有 Windows/Mac 原生软件通吃） |
+| **Token 开销** | 复杂大网页 DOM 树动辄几万 Token | 固定图片开销（约 1000 Token/帧） |
 
 ---
 
-## 3. 视觉标记破局：Set-of-Marks (SoM) 提示法
+## 2. 解决点击发飘的绝招：Set-of-Marks (SoM) 标签法
 
-大语言模型直接根据裸图预测 `[x: 432, y: 891]` 往往存在坐标发飘（Coordinate Drift）的现象。微软与斯坦福大学提出了划时代的 **Set-of-Marks (SoM) 视觉标记法**：
+让大模型直接从一张 1920×1080 的截图里猜“立即提交”按钮在 `[x: 432, y: 891]`，模型非常容易算偏。
+
+微软和学术界提出了一个非常巧妙的办法——**Set-of-Marks (SoM)**：
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Agent as 视觉决策 Agent
-    participant VisionHook as 视觉预处理层 (CV / OCR 目标检测)
-    participant UI as 操作系统桌面
+    actor Agent as 视觉模型
+    participant Hook as 预处理脚本 (本地 OpenCV/OCR)
+    participant OS as 操作系统屏幕
 
-    UI->>VisionHook: 捕获当前屏幕截屏
-    VisionHook->>VisionHook: 自动检测所有可交互按钮与输入框
-    VisionHook->>VisionHook: 在各元素中心绘制半透明数字标签 [1], [2], [3]...
-    VisionHook-->>Agent: 发送打上数字标签的合成图像
+    OS->>Hook: 捕获当前屏幕截屏
+    Hook->>Hook: 自动把可点击的按钮圈出来，在上面贴上半透明数字标签: [1], [2], [3]...
+    Hook-->>Agent: 把打好标签的合成图发给模型
     
-    Note over Agent: 模型无需猜复杂坐标，<br/>只需输出: "点击 [14] 号标签"
+    Note over Agent: 模型不用猜复杂的坐标了！<br/>只需直接输出: "点击 [14] 号标签"
     
-    Agent->>UI: 执行: click_mark(id: 14)
-    UI-->>Agent: 界面跳转，完成精准交互
+    Agent->>OS: 执行物理点击
+    OS-->>Agent: 页面成功跳转
 ```
 
-> 💡 **SoM 的威力**：将复杂的“连续空间二维坐标回归任务”，降维为极其简单的“离散整数多选题（Classification）”。实验证明，SoM 使得模型在复杂界面的点击准确率直接从 62% 跃升至 **93%**！
+* **把“填空题”变成了“单选题”**：模型不用再去猜连续的二维坐标，只要从截图中辨认出哪个方框里是“提交”，输出数字代号即可；
+* 实验表明，加上 SoM 之后，模型在复杂表单里的点击准确率直接从 **62% 暴涨到 93%**！
 
 ---
 
-## 4. 全栈实战：构建 DOM 与视觉混合的浏览器点击控制器 (TypeScript)
+## 3. 生产级最佳实践：DOM 优先，视觉坐标兜底
 
-在现代 Web Agent 架构中，最顶尖的方案是**“以 DOM 为首选主攻、视觉截屏为兜底验证”的双模闭环**：
+在真实的网页自动化场景中，最聪明的策略一定是**双模混合**：
 
-```typescript
-// hybrid-gui-controller.ts
-import { Page } from 'playwright';
-
-export interface ClickTarget {
-  selector?: string;      // DOM 路径优先
-  textPattern?: string;   // 可视文本
-  fallbackCoords?: { x: number; y: number }; // 视觉坐标保底
-}
-
-export class HybridBrowserController {
-  constructor(private page: Page) {}
-
-  /**
-   * 双模稳健点击：DOM 尝试 -> 视觉坐标兜底
-   */
-  async robustClick(target: ClickTarget): Promise<string> {
-    // 1. 尝试使用 DOM 路径精准命中
-    if (target.selector) {
-      try {
-        const element = await this.page.waitForSelector(target.selector, { timeout: 3000 });
-        if (element && (await element.isVisible())) {
-          await element.click();
-          return `【DOM 成功】：通过选择器 "${target.selector}" 完成高精度点击`;
-        }
-      } catch {
-        console.warn(`[GUI Controller] DOM 选择器 ${target.selector} 超时或不可见，触发降级方案...`);
-      }
-    }
-
-    // 2. 尝试使用可见文本定位
-    if (target.textPattern) {
-      try {
-        const textBtn = this.page.getByText(target.textPattern).first();
-        if (await textBtn.isVisible()) {
-          await textBtn.click();
-          return `【文本定位成功】：通过界面文本 "${target.textPattern}" 触发点击`;
-        }
-      } catch {
-        console.warn(`[GUI Controller] 文本匹配失败，触发视觉像素绝对坐标点击...`);
-      }
-    }
-
-    // 3. 终极兜底：基于像素坐标的模拟硬件物理点击
-    if (target.fallbackCoords) {
-      const { x, y } = target.fallbackCoords;
-      await this.page.mouse.move(x, y);
-      await this.page.mouse.down();
-      await this.page.mouse.up();
-      return `【视觉坐标兜底】：在像素坐标 [${x}, ${y}] 处完成硬件模拟物理点击`;
-    }
-
-    throw new Error('所有点击定位策略均宣告失败，请重新截屏评估界面状态！');
-  }
-}
+```mermaid
+flowchart TD
+    Task[需要点击 '确认支付' 按钮] --> Step1{先用 DOM 选择器定位}
+    Step1 -->|成功找到唯一节点| Click1[直接通过 Playwright 点击节点 (100% 稳)]
+    Step1 -->|找不到/被 Shadow DOM 挡住| Step2{再用可见文本定位}
+    Step2 -->|文本唯一可见| Click2[通过 getByText 点击]
+    Step2 -->|还是找不到| Step3[截取屏幕，由视觉多模态预测像素坐标物理点击 (兜底)]
 ```
+
+能通过代码结构直接点到的，绝不费周折去猜坐标；只有遇到复杂的 Canvas 绘图、防爬机制或者桌面软件时，才降级到视觉模拟硬件点击。
 
 ---
 
-## 5. 本节练习与反思
+## 4. 随堂检验
 
 <Quiz
-  question="在开发 Web 自动化 Agent 时，为什么基于纯 DOM 树的方案面对包含 Canvas 绘图或桌面原生弹窗的网页时会彻底失效？"
+  question="在基于视觉截屏的 GUI 操作（Computer Use）中，为什么引入 Set-of-Marks（在截图中为按钮标注数字标签）能大幅提升点击准确率？"
   options={[
-    "因为 Canvas 内部图形和系统原生弹窗完全不会在 HTML DOM 树中生成对应的子节点，在 DOM 树视角下它们只是一块黑盒或不可见的透明图层",
-    "因为现代浏览器规定 DOM 树的最大节点总数不得超过 100 个",
-    "因为 Canvas 元素只允许使用 C++ 语言编写的专用大模型进行解析",
-    "因为读取 Canvas 元素会自动导致当前网页的 SSL 证书失效"
+    {
+      text: "A. 将高难度的二维连续像素坐标预测，降维成了极其容易识别的离散序号多选题",
+      isCorrect: true,
+      explanation: "直接预测 [x, y] 坐标极易产生偏移，而预先打上数字标记后，大模型只需看图指出包含目标按钮的序号，完全避开了坐标回归的精度损失。"
+    },
+    {
+      text: "B. 因为贴了数字标签后，操作系统就会自动免密直接授权管理员权限",
+      isCorrect: false,
+      explanation: "视觉标记只是给大模型看的图像增强，与系统权限授权无关。"
+    },
+    {
+      text: "C. 这样可以强行阻止用户在操作过程中关闭电脑屏幕电源",
+      isCorrect: false,
+      explanation: "图像处理无法控制硬件物理电源开关。"
+    },
+    {
+      text: "D. 这样可以完全省去大模型对截屏图片的任何视觉理解计算",
+      isCorrect: false,
+      explanation: "模型仍然需要看图比对意图与标签位置，只是输出形式从坐标变成了序号。"
+    }
   ]}
-  correctIndex={0}
-  explanation="DOM 树只能反映 HTML 标签。Canvas（以及 WebGL、桌面原生菜单）将所有视觉元素绘制在统一的位图像素缓冲区中，DOM 树上只有一个孤立的 canvas 标签，内部逻辑对 DOM 遍历完全不可见。此时必须依赖纯视觉 Computer Use 方案进行像素级定位。"
 />
 
-<Quiz
-  question="在视觉 GUI 智能体中，Set-of-Marks (SoM) 提示法之所以能够显著提升模型点击按钮的准确率，其核心机理是什么？"
-  options={[
-    "通过在界面候选元素上预先叠加带有数字编号的视觉标记，将预测浮点像素坐标的连续难题转化为选择特定整数编号的离散任务",
-    "通过自动调高显卡的刷新率，使得大语言模型的推理速度加快三倍",
-    "通过向显示器屏幕发送红外信号，直接从硬件物理上锁定鼠标光标的位置",
-    "通过将所有截屏图片的分辨率强制缩小至 16x16 像素以降低噪声"
-  ]}
-  correctIndex={0}
-  explanation="大语言模型在连续二维空间坐标回归（如准确说出[532, 712]）上容易产生轻微偏差；而将候选框预打上[1]、[2]、[3]等标签后，模型只需进行分类决策（'点击标签 2'），彻底消除了坐标漂移的痛点。"
-/>
+---
+
+## 延伸阅读
+
+* 《AI Agents in Depth: Design Principles and Engineering Practice》（李博杰，2026）第 6.1 节。
+* Anthropic 官方指南：《Computer Use (Beta) Overview》。
+* 下一节：[6.2 语音智能体：端到端全双工与毫秒级打断](/ch06-interaction/02-voice-agent-and-full-duplex)

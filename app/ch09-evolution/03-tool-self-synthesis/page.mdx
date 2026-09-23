@@ -1,69 +1,73 @@
 import { Quiz } from '@/components/Quiz'
 
-# 9.3 工具自合成与技能涌现：从工具使用者跃迁为工具创造者
+# 9.3 工具自合成：从使用现成接口到自己写辅助脚本
 
-> **本节要点**：人类文明演进的终极分水岭在于“不仅会使用自然界现成的木棍，更懂得将黑曜石打磨成锋利的石斧”。掌握 Agent 从被动的 **工具使用者（Tool User）** 跨越为主动的 **工具创造者（Tool Maker）** 的技术全景；深度剖析 **Tool-Making & Tool-Using 双阶段流水线**；构建包含自动编写、沙箱自测与动态注册的自合成工具工厂。
+> 很多时候我们使用 Agent，都是开发者提前给它定义好一堆工具（比如 `grep`、`view_file`、`curl`）。但如果任务遇到一个高频又繁琐的重复操作——比如要把 200 个格式各异的日志文件清洗成统一的 JSON 表格——如果让 Agent 每次都用底层的命令行慢慢折腾几十轮，不仅费时费 Token，还很容易中途翻车。一个真正熟练的程序员面对这种事，通常会花十分钟写个 Python 辅助脚本，跑通测试后放在项目的 `scripts/` 目录里随时调用。Agent 也完全可以拥有这种“自己造工具”的能力（学术界常称为 LATM 或 Voyager 模式）。这一节我们聊聊工具自合成的落地流程与安全防线。
 
 ---
 
-## 1. 终极跃迁：从“调用别人给的 API”到“自己造轮子”
+## 1. 为什么 Agent 需要“自己写工具”？
 
-在过去，Agent 的能力边界被人类工程师预设的工具集合死死框定：
-* 如果工程师只给它提供了 `grep` 和 `curl`，遇到需要批量解析数百个特殊格式的二进制日志时，Agent 只能在终端中笨拙地反复尝试上百次；
-* 这种重复劳动极度浪费 Token，且极易出错。
-
-**工具自合成范式（LATM: LLMs as Tool Makers）** 将自主性推向了前所未有的顶峰：
-当 Agent 意识到手头缺乏称手的工具、或者某项高频操作需要被标准化时，**它会自发编写一段高质量的代码脚本，为其定义标准的入参 Schema，在沙箱中跑通单元测试，并将其永久注册为一个全新的本地工具！**
+如果 Agent 只能被动使用人类预先写好的 API，它的能力边界就会被锁死：
 
 ```mermaid
-graph TD
-    subgraph Traditional["传统被动 Agent: 永远依赖保姆"]
-        A1["面临复杂重复任务"] --> A2["手头工具不够用，任务瘫痪报错"]
-        A2 --> A3["等待人类程序员下周抽空开发新工具插件"]
+flowchart TD
+    subgraph Passive["被动使用现成工具"]
+        P1["面对批量复杂任务 (如清洗 500 个日志文件)"]
+        P2["手头只有基础的 grep 和 bash"]
+        P3["在循环里反复敲命令 200 次，中途容易超时或遗漏，耗费巨额 Token"]
+        P1 --> P2 --> P3
     end
     
-    subgraph ToolMaker["现代工具自合成 Agent: 工业级自给自足"]
-        B1["面临复杂重复任务"] --> B2["自发启动 Tool-Maker 子流水线"]
-        B2 --> B3["编写专业处理脚本 + 单元测试并在沙箱验证"]
-        B3 --> B4["动态注册至本地 MCP 工具注册表"]
-        B4 --> B5["后续面对同类任务: 一键秒级调用新工具搞定！"]
+    subgraph Active["自主合成可复用工具 (LATM 模式)"]
+        A1["发现这是重复高频任务，决定自制一个专用脚本"]
+        A2["编写 parse_logs.py 并配上对应的单元测试"]
+        A3["在沙箱里跑通测试，动态挂载为新工具"]
+        A4["以后再遇到类似任务，一句话调用该脚本秒级搞定"]
+        A1 --> A2 --> A3 --> A4
     end
 ```
 
+这种模式把“长程脆弱的任务探索”变成了“一次性编写、永久稳定复用”的代码资产，就像把临时手写的一段逻辑封装成了一个标准函数库。
+
 ---
 
-## 2. 工具自合成四步流水线 (The Tool-Making Pipeline)
+## 2. 工具自合成的标准四步流程
+
+让 Agent 自己造轮子，最怕它写出死循环或者带安全隐患的脚本。因此必须走通严格的准入机制：
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant TaskAgent as 任务调度中枢 (Dispatcher)
-    participant Maker as 工具制造智能体 (Tool-Maker)
-    participant Sandbox as 隔离验证沙箱 (Docker Sandbox)
-    participant Registry as 本地动态工具注册池 (Tool Registry)
+    participant Agent as 主任务智能体
+    participant ToolMaker as 工具编写模块
+    participant Sandbox as 沙箱测试环境
+    participant Registry as 工具注册中心
 
-    TaskAgent->>Maker: "检测到批量重构 PDF 目录为 JSON 的高频需求，请自制一个专用工具"
-    Maker->>Maker: 编写独立可执行脚本: convert_pdf_toc.ts
-    Maker->>Maker: 编写标准化 MCP 工具声明与 Zod 参数契约
-    Maker->>Maker: 编写自测单元测试用例 (Self-Verification Tests)
+    Agent->>ToolMaker: "把日志清洗逻辑封装为一个独立的 CLI 工具"
+    ToolMaker->>ToolMaker: 1. 编写独立功能脚本 (parse_log.ts)
+    ToolMaker->>ToolMaker: 2. 定义标准参数输入输出 Schema (Zod / JSON Schema)
+    ToolMaker->>ToolMaker: 3. 编写对应的测试用例 (parse_log.test.ts)
     
-    Maker->>Sandbox: 将代码与测试打入沙箱执行
-    Sandbox-->>Maker: 返回单测全绿通过 (All Tests Passed)
+    ToolMaker->>Sandbox: 将实现与测试送入沙箱运行
+    Sandbox-->>ToolMaker: 测试全绿通过 (exit code == 0)
     
-    Maker->>Registry: 动态热注册新工具: convert_pdf_toc
-    Registry-->>TaskAgent: 广播新工具就绪事件
-    TaskAgent->>Registry: 立即调用 convert_pdf_toc 工具完成原本繁琐的任务！
+    ToolMaker->>Registry: 注册新工具并标记为 custom_* 命名空间
+    Registry-->>Agent: 广播新工具就绪
+    Agent->>Registry: 直接调用新工具，单步搞定复杂清洗任务！
 ```
 
-### 生产级自制工具的准入四铁律
-1. **沙箱强制闭环断言**：新工具必须自带不少于 3 组涵盖正常与边界异常的单元测试，必须在隔离沙箱中 `exit code === 0` 通过方可准入；
-2. **纯函数与无害副作用**：自制工具严禁包含写入未知网络或提权的危险操作，必须经过静态 AST 安全扫描；
-3. **元数据自动生成（Auto-Documentation）**：自动生成详尽的 Tool Description，清晰阐述该工具的输入、输出、最佳适用场景与限制条件；
-4. **命名空间隔离（Namespace Isolation）**：自制工具打上 `custom_*` 前缀，与系统核心基石工具（如 `run_command`）严格区分，防止同名恶意覆盖劫持。
+### 自制工具的准入准则
+1. **测试全绿才能入库**：新生成的代码必须自带至少 2~3 个单元测试用例，并在独立子进程/沙箱里跑通，杜绝把带 Bug 的脚本挂进工具池；
+2. **严格设置执行超时**：自制工具必须配有强制超时时间（如 15 秒），防止脚本内写出死循环导致整个主进程挂死；
+3. **命名空间隔离**：自制工具统一加前缀（如 `custom_*`），绝对不允许覆盖系统内置的核心工具（如 `run_command`、`view_file`）；
+4. **生成清晰的使用文档**：写清楚工具的适用场景、输入字段含义和常见反例，确保后续任务能正确理解并调用。
 
 ---
 
-## 3. 全栈实战：动态工具工厂与沙箱热注册 (TypeScript)
+## 3. 实战：动态工具工厂与沙箱验证 (TypeScript)
+
+在 Node.js 中，我们可以实现一个简单的工具制造工厂：
 
 ```typescript
 // dynamic-tool-factory.ts
@@ -84,7 +88,7 @@ export class DynamicToolFactory {
   private static readonly TOOLS_DIR = './custom_tools';
 
   /**
-   * 制造并热注册一个全新工具
+   * 编写并测试自制工具，测试通过后动态挂载
    */
   static async makeAndRegisterTool(spec: SyntheticToolSpec): Promise<{ success: boolean; message: string }> {
     const { name, description, scriptContent, testContent } = spec;
@@ -93,26 +97,26 @@ export class DynamicToolFactory {
     try {
       await fs.mkdir(toolDir, { recursive: true });
 
-      // 1. 写入工具实现与测试脚本
+      // 1. 写入工具实现与自测试脚本
       await fs.writeFile(`${toolDir}/index.ts`, scriptContent, 'utf-8');
       await fs.writeFile(`${toolDir}/index.test.ts`, testContent, 'utf-8');
 
-      // 2. 在沙箱环境中运行自测用例
-      console.log(`🧪 [Tool Factory] 正在对自制工具 ${name} 执行安全回归测试...`);
-      const { stdout } = await execAsync(`npx ts-node ${toolDir}/index.test.ts`, { timeout: 15000 });
+      // 2. 在隔离子进程中跑测试，设置 15 秒硬超时
+      console.log(`🧪 [Tool Factory] 正在对自制工具 ${name} 运行单元测试...`);
+      await execAsync(`npx ts-node ${toolDir}/index.test.ts`, { timeout: 15000 });
 
-      // 3. 校验通过，正式挂载进入可用工具索引
-      console.log(`✅ [Tool Factory] 工具 ${name} 通过全量自测验证！已成功热挂载。`);
+      // 3. 测试通过，正式挂载
+      console.log(`✅ [Tool Factory] 工具 ${name} 自测全部通过，已成功注册！`);
       return {
         success: true,
-        message: `自制工具 ${name} 已通过沙箱测试并成功热注册，可在后续推理中直接作为函数调用。`,
+        message: `自制工具 ${name} 测试通过并成功挂载，后续任务可直接调用。`,
       };
     } catch (err: any) {
-      // 若测试失败，清理残留废弃物
+      // 若测试失败，清理残留文件，坚决不准带病入库
       await fs.rm(toolDir, { recursive: true, force: true });
       return {
         success: false,
-        message: `自制工具 ${name} 未能通过自测验证，已回滚废弃！错误信息: ${err.message}`,
+        message: `自制工具 ${name} 未能通过自测，已回滚废弃。原因: ${err.message}`,
       };
     }
   }
@@ -121,28 +125,28 @@ export class DynamicToolFactory {
 
 ---
 
-## 4. 本节练习与反思
+## 4. 自测练习
 
 <Quiz
-  question="在 Agent 自进化架构中，从'使用工具（Tool-Using）'跃迁为'创造工具（Tool-Making）'的最本质区别是什么？"
+  question="在 Agent 自进化体系中，'自合成工具（Tool-Making）'相比每次临时执行多步命令，最核心的工程价值是什么？"
   options={[
-    "智能体能够根据特定新场景的痛点，自发编写独立的代码函数与单元测试，在沙箱验证后将其注册为可供未来持续复用的新工具，实现了能力的永久性滚雪球积累",
-    "创造工具意味着智能体必须拥有从铁矿石中冶炼金属制造实体螺丝刀的能力",
-    "创造工具能够让大语言模型完全摆脱对任何计算机硬件与电力的依赖",
-    "创造工具意味着大模型可以自动为自己申请合法的人类国籍和身份证件"
+    "针对高频复杂的重复逻辑，自主编写独立脚本并封装成可复用工具，把原本需要几十轮脆弱尝试的长任务沉淀为确定性的标准能力，大幅节约 Token 并提升稳定性",
+    "让模型不需要任何计算机硬件就可以在纸上自动运行代码",
+    "完全消除操作系统中的所有文件读写权限限制",
+    "让所有的云端 API 都免除网络请求延迟"
   ]}
   correctIndex={0}
-  explanation="工具制造是认知能力的重大飞跃。智能体不再局限于人类提前给定的固定 API，而是能针对高频复杂任务自主抽象出通用函数库（如 Voyager 模式），并将其持久化为技能积木，让后续更复杂的任务能直接站在新工具的肩膀上。"
+  explanation="面对批量或高频复杂操作，临时多轮交互既慢又容易出错。自主编写辅助脚本、测试通过后作为工具持久化沉淀，能让 Agent 的能力像滚雪球一样不断增强，后续同类任务一步即可完成。"
 />
 
 <Quiz
-  question="为什么由 Agent 自主合成的新工具（Synthetic Tools）必须强制通过沙箱单元测试（Self-Verification Tests）方可允许注册入库？"
+  question="为什么由 Agent 自主合成的新工具在正式注册进入可用工具池之前，必须在沙箱中强制跑通单元测试？"
   options={[
-    "防止大模型生成的代码存在语法报错、死循环或逻辑缺陷，确保动态加入工具池的新函数百分之百可用且不会污染后续其他任务的决策环境",
-    "因为现代操作系统的软件版权法严格禁止未经过测试的代码被保存在硬盘上",
-    "因为没有单元测试的代码会自动导致机房的空调跳闸断电",
-    "为了让大模型在写单元测试的过程中自动把模型版本升级为最高配置"
+    "确保模型生成的脚本没有语法错误、死循环或逻辑漏洞，防止有缺陷的工具被注册后污染全局工具库并导致后续任务崩溃",
+    "因为现代操作系统的文件系统不允许保存未测试的文件",
+    "为了让编写测试脚本的过程降低当前服务器的内存消耗",
+    "因为开源协议规定没有测试用例的代码会自动被编译器删除"
   ]}
   correctIndex={0}
-  explanation="未经验证的代码就是潜在的地雷。如果 Agent 制造了一个存在语法错误或死循环的破损工具并放入系统，后续一旦被其他任务调度，将引发灾难性的级联崩溃。强制在隔离沙箱中测试全绿是保证工具库高纯度演进的底线防线。"
+  explanation="未经验证的代码是潜在的地雷。如果生成的工具存在死循环或语法错误，一旦挂载进工具池被其他会话调用，会引发连锁崩溃。在沙箱里跑通单元测试并加超时保护，是保证工具池干净可靠的底线。"
 />

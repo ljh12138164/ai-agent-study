@@ -2,191 +2,141 @@ import { Quiz } from '@/components/Quiz'
 
 # 4.1 工具分类学与 ACI 界面设计法则
 
-> **本节要点**：工具（Tools）是 Agent 从“语言生成器”跃迁为“数字行动实体”的根本桥梁。掌握生产级工具的三维风险分类学；吃透面向模型的 **ACI（Agent-Computer Interface）** 界面设计五大黄金法则；学会使用 TypeScript + Zod 打造具备自愈错误反馈的工业级工具。
+> 只靠大模型本身，它充其量是个“打字机”：不知道当下的实时汇率，改不了你硬盘里的文件，更不敢直接让它调扣款接口。给它配工具，就是给它装上手和脚。但给 Agent 设计工具，跟平时给前端写 API 完全是两回事：前端开发者能看懂隐晦的入参约定，而大模型全靠你的 JSON Schema 来猜。如果接口设计得别扭，模型就会不断传错参数。这一节我们聊聊面向模型的接口设计（ACI）。
 
 ---
 
-## 1. 从“嘴炮”到“实体”：为什么工具定义了 Agent 的上限？
+## 1. 工具的三级风险分类
 
-纯大语言模型（LLM）存在三大天然宿命局限：
-1. **时空停滞**：参数固化在训练切片时间点，不知道此时此刻的实时汇率、股价或天气；
-2. **无物理手脚**：模型只能输出 Token 字符流，无法凭空修改磁盘文件、调用内部微服务或给客户发邮件；
-3. **精准计算瘫痪**：在长数字乘除法、日期差值推算或矩阵逆变换上，自回归生成极易陷入微小累计误差。
-
-**工具调用（Function Calling / Tool Execution）** 是打破上述局限的终极杠杆。
-如同人类依赖计算机界面（GUI）工作，Agent 依赖专为其设计的 **ACI（Agent-Computer Interface，智能体计算机交互界面）** 与外部世界进行交互。
+在生产环境里，决不能把所有工具一视同仁。必须根据操作的破坏性和可逆性，划出清晰的防线：
 
 ```mermaid
-graph LR
-    User["人类意图"] --> Agent["Agent 核心思考中枢"]
-    
-    subgraph ACI["ACI 智能体交互层 (Agent-Computer Interface)"]
-        Agent -->|1. 意图转译为结构化调用| ToolCall["Tool Call: name + arguments"]
-        ToolCall -->|2. 执行沙箱| Runtime["工具运行时 (Local / Remote / Sandbox)"]
-        Runtime -->|3. 捕获真实世界反馈| ToolResult["Observation: 执行输出 / 报错堆栈"]
-        ToolResult -->|4. 注入上下文| Agent
-    end
-    
-    Runtime <--> ExternalWorld["外部世界 (文件系统 / 数据库 / GitHub / Stripe)"]
+flowchart TD
+    T1["Level 1 · 只读探针工具 (Read-only)<br/>例如: read_file, grep, search<br/>风险极低，允许静默并发执行，超时自动重试"]
+    --> T2["Level 2 · 本地修改工具 (Local-Modifying)<br/>例如: write_file, git_checkout<br/>有副作用但可逆，需要配合本地 Git 快照回滚机制"]
+    --> T3["Level 3 · 外部不可逆工具 (World-Affecting)<br/>例如: send_email, drop_table, pay_charge<br/>极高风险且不可撤销，必须弹窗经人类确认 (HITL) 才能放行"]
 ```
 
----
-
-## 2. 生产级工具三维分类学 (Tool Taxonomy)
-
-在工业级 Agent 架构中，严禁将所有工具混为一谈、无差别对待。必须根据**操作对系统状态的不可逆性与破坏性**，将工具严密划分为三个风险等级：
-
-```mermaid
-graph TD
-    subgraph Taxonomy["生产级工具三维风险层级"]
-        T1["Level 1: 只读探针工具 (Read-only Tools)<br/>· 举例: grep_search, read_file, curl_get<br/>· 风险: 极低<br/>· 调度策略: 允许高并发、静默重试、免授权"]
-        
-        T2["Level 2: 本地状态变更工具 (Local-Modifying Tools)<br/>· 举例: write_file, git_checkout, local_test<br/>· 风险: 中等<br/>· 调度策略: 需本地快照与回滚机制、限流"]
-        
-        T3["Level 3: 外部世界影响工具 (World-Affecting Tools)<br/>· 举例: send_email, db_drop_table, stripe_charge<br/>· 风险: 极高 (不可逆)<br/>· 调度策略: 强制人工介入审批 (Human-in-the-loop)、幂等令牌"]
-        
-        T1 -->|风险升级| T2
-        T2 -->|影响扩散| T3
-    end
-```
-
-| 维度 | Read-only Tools | Local-Modifying Tools | World-Affecting Tools |
+| 风险等级 | 代表工具 | 可逆性 | 执行策略 |
 | :--- | :--- | :--- | :--- |
-| **典型操作** | 文件检索、文档查看、API 查询 | 本地文件写入、代码修改、分支切换 | 生产数据库写库、银行扣款、邮件发送 |
-| **可逆性** | 完全可逆（无副作用） | 可逆（依赖 Git 快照或本地备份） | **绝大多数不可逆**（短信发出无法收回） |
-| **重试策略** | 遇到网络超时可自动指数退避重试 | 需先清理污染现场再执行重试 | **严禁无条件重试**（必须依赖幂等令牌） |
-| **授权策略** | 系统全自动静默执行 | 依据沙箱权限白名单隔离放行 | **必须弹窗请求人类确认（HITL）** |
+| **Level 1 (只读)** | `cat`, `grep`, `fetch_url` | 100% 可逆，无副作用 | 框架直接自动放行，支持失败静默重试 |
+| **Level 2 (本地写)** | `edit_file`, `exec_script` | 可逆（靠版本控制或沙箱快照） | 限制在受控沙箱目录，提供一键回滚操作 |
+| **Level 3 (外部影响)** | `send_email`, `stripe_pay` | **几乎不可逆**（发出去的邮件撤不回） | **强制弹窗转人工确认（HITL）**，强制带幂等令牌 |
 
 ---
 
-## 3. ACI 界面设计五大黄金法则
+## 2. ACI 界面设计的 4 条实用铁律
 
-为 Agent 设计工具，与为人类前端设计 RESTful API 存在本质区别：
-人类程序员能查阅几万字的手册、理解隐晦的入参约定；但 **Agent 是概率预测模型，其调用工具完全依赖于 Tool Schema 的提示词表征**。
-
-良好的 ACI 设计直接决定了 Agent 的调用成功率（Function Call Accuracy）。
+为什么管这个叫 **ACI（Agent-Computer Interface）**？因为你的接口不是给人调的，是给“靠概率猜字的模型”调的。
 
 ```mermaid
-graph LR
-    A["1. 极简扁平参数<br/>Flat Schema"] --> B["2. 防御性强类型校验<br/>Zod Strict Validation"]
-    B --> C["3. 错误即提示词反馈<br/>Error as Feedback"]
-    C --> D["4. 文档即行为指令<br/>Description as Prompt"]
-    D --> E["5. 全流程幂等性保障<br/>Idempotency Guard"]
+flowchart LR
+    A["1. 参数尽量拍平<br/>(少用三层嵌套对象)"] --> B["2. 描述写清楚何时别用<br/>(防误调用边界)"]
+    B --> C["3. 报错信息要带改错建议<br/>(驱动自愈重试)"]
+    C --> D["4. 支付发信带幂等 Token<br/>(防网络抖动重复调)"]
 ```
 
-### 法则 1：极简扁平入参 (Flat Schema)
-*   **反模式（Anti-pattern）**：三层深度嵌套的庞大 JSON 对象，包含大量可选嵌套字段。LLM 在补全多层括号时极易出现 JSON 格式截断或字段放错层级。
-*   **最佳实践**：优先采用**平铺扁平参数**。如果必须传入复杂配置，拆解为多个单一目的的小工具。
+### 1. 参数尽量扁平，拒绝深层嵌套
+* **反面教材**：设计了一个包含四层嵌套的大 JSON 对象，里面有各种可选的数组和对象。模型在生成很长的 JSON 时，极其容易括号不匹配或者把字段放错层级。
+* **正面做法**：入参越扁平越好。如果参数确实很多，拆成两个职责单一的小工具。
 
-### 法则 2：文档即行为指令 (Description as Prompt)
-工具的 `description` 不只是给人类看的注释，而是**给 LLM 看的 System Prompt 延伸**！
-*   必须明确指明：**在什么前置条件下调用本工具**；
-*   必须声明：**什么时候绝对不要调用本工具**；
-*   入参字段必须附带正反例（Example）。
+### 2. 工具描述（Description）写清楚“什么时候不要用”
+模型的工具描述不只是给人看的注释，它就是 **System Prompt 的一部分**！
+* 写清楚：在什么场景下调它；
+* **更要写清楚：在什么情况下坚决不能调它**（比如声明“只支持文本文件，严禁用来修改图片或二进制文件”）。
 
-### 法则 3：错误输出即高质量修复反馈 (Error as Feedback)
-当工具执行抛出异常时，**绝对不要只返回 `status: 500` 或 `Failed`**！
-Agent 具备利用错误自我修复（Self-healing）的本能。高质量的 ACI 返回结构如下：
+### 3. 报错信息要能指导重试（Error as Feedback）
+工具执行失败时，**千万别只返回一个 `500 Internal Error`**。模型看到这个根本不知道怎么自愈。
+好的错误返回长这样：
 ```json
 {
   "status": "error",
-  "error_code": "FILE_NOT_FOUND",
-  "message": "文件 /app/config.json 不存在。",
-  "suggestion": "检测到该目录下存在 /app/config.example.json，是否需要先执行 copy_file？"
+  "code": "FILE_NOT_FOUND",
+  "message": "文件 src/app.ts 不存在",
+  "suggestion": "同目录下存在 src/app.tsx，你是否是要编辑该文件？"
 }
 ```
+模型看到这段建议，下一轮就能立刻自动改对参数。
 
-### 法则 4：全流程幂等性设计 (Idempotency Token)
-LLM 在遇到网络轻微卡顿或超时重传时，会重复发出相同的 Tool Call。
-对于高危工具（如创建付款单），工具入参必须包含一个由 Agent 根据上下文生成的唯一 `idempotency_key`。后端服务端校验此 Key，确保重复请求只执行一次。
+### 4. 关键操作强制带幂等键（Idempotency Key）
+网络轻微卡顿或者接口超时时，模型以为刚才没成功，很可能在下一轮再次发起一模一样的调用。
+对于发邮件、扣款等关键操作，接口必须要求传入一个 `idempotency_key`。服务端收到重复的 Key 直接返回上次的缓存结果，绝不扣两次钱。
 
 ---
 
-## 4. 全栈实战：基于 TypeScript + Zod 定义生产级 ACI
-
-以下展示符合现代工业级规范的 Agent 工具定义模式：
+## 3. TypeScript + Zod 实战写法
 
 ```typescript
 import { z } from 'zod';
 
-// 1. 使用 Zod 定义强类型与详尽字段描述
-export const FileEditSchema = z.object({
-  filePath: z.string().describe('待修改文件的绝对路径，必须以 / 或盘符开头'),
-  targetSnippet: z.string().describe('文件中需要被替换的精确代码片段，必须与原文件字符逐字匹配，包含缩进'),
-  replacementSnippet: z.string().describe('用于替换的新代码内容'),
-  createIfNotExists: z.boolean().default(false).describe('若目标文件不存在，是否自动创建新文件'),
+// 1. 用 Zod 定义强类型与清晰的参数说明
+export const EditFileSchema = z.object({
+  filePath: z.string().describe('待修改文件的绝对路径，必须是文本文件'),
+  targetContent: z.string().describe('待替换的原代码片段，必须与原文件完全一致（含缩进）'),
+  replacementContent: z.string().describe('替换后的新代码内容'),
 });
 
-export type FileEditInput = z.infer<typeof FileEditSchema>;
-
-// 2. 导出符合 OpenAI / MCP 规范的 Tool Definition
-export const fileEditTool = {
-  name: 'file_edit',
-  description: `安全地编辑本地文件内容。
+// 2. 工具定义：重点说明使用限制
+export const editFileTool = {
+  name: 'edit_file',
+  description: `用于精确替换文本文件中的代码片段。
 【使用限制】：
-- 仅支持文本文件，严禁用于修改 .png、.exe 等二进制文件。
-- 替换内容必须保证原子性，如果 targetSnippet 在文件中出现多次，执行将报错回滚以防破坏代码。`,
-  parameters: zodToJsonSchema(FileEditSchema),
+- 仅限文本文件，禁止修改图片、音视频等二进制文件；
+- targetContent 必须在原文件中唯一存在；如果匹配到多处，操作将直接报错拒绝。`,
+  parameters: zodToJsonSchema(EditFileSchema),
 };
 
-// 3. 具备自愈式错误反馈的执行器
-export async function executeFileEdit(args: unknown): Promise<string> {
-  // ACI 防御层：参数严格校验
-  const parseResult = FileEditSchema.safeParse(args);
-  if (!parseResult.success) {
+// 3. 执行器：参数校验失败时，提供友好的错误反馈
+export async function handleEditFile(rawArgs: unknown) {
+  const result = EditFileSchema.safeParse(rawArgs);
+  if (!result.success) {
     return JSON.stringify({
       status: 'error',
-      code: 'INVALID_ARGUMENTS',
-      message: '工具入参格式错误，请检查参数类型',
-      details: parseResult.error.format(),
+      error_type: 'INVALID_ARGUMENTS',
+      message: '参数格式不匹配，请检查传入字段',
+      details: result.error.format()
     });
   }
 
-  const { filePath, targetSnippet, replacementSnippet } = parseResult.data;
-  
-  try {
-    // 执行文件替换逻辑...
-    return JSON.stringify({
-      status: 'success',
-      message: `成功更新文件: ${filePath}`,
-      diffSummary: `替换了 1 处代码块`,
-    });
-  } catch (err: any) {
-    // 关键：将错误转化为引导模型纠偏的精确提示
-    return JSON.stringify({
-      status: 'error',
-      code: 'TARGET_NOT_FOUND',
-      message: `在 ${filePath} 中未能找到匹配的 targetSnippet。`,
-      suggestion: '建议先调用 view_file 工具重新确认目标代码片段的精确行号与缩进。',
-    });
-  }
+  // 正常执行替换...
+  return JSON.stringify({ status: 'success', message: '修改已生效' });
 }
 ```
 
 ---
 
-## 5. 本节练习与反思
+## 4. 随堂检验
 
 <Quiz
-  question="在为 Agent 设计 ACI（Agent-Computer Interface）工具时，当工具执行失败时，以下哪种做法最符合最佳工程实践？"
+  question="在为 Coding Agent 设计一个用于修改代码的本地文件工具时，以下哪种接口与错误处理设计最利于 Agent 自愈？"
   options={[
-    "返回富含语义的结构化错误信息，包括失败原因和具体的纠错建议（Suggestion），引导 Agent 在下一轮自愈修复",
-    "直接吞掉错误并返回一个空字符串，防止错误信息干扰大语言模型的上下文注意力和生成质量",
-    "立即强行终止整个 Agent 进程，避免模型产生连锁反应造成不可控的计算资源消耗",
-    "在系统提示词中将重试次数设为 100 次，并以相同的入参原样发起并发暴力请求"
+    {
+      text: "A. 工具执行抛错时仅向模型回传一行粗暴的‘500 Internal Server Error’",
+      isCorrect: false,
+      explanation: "缺少具体报错原因，模型无法知道是路径写错、权限不足还是内容不匹配，失去纠错自愈机会。"
+    },
+    {
+      text: "B. 采用扁平参数，并在执行失败时返回具体原因与建议（如提示相近的文件名）",
+      isCorrect: true,
+      explanation: "扁平参数减少格式生成错误，而带有上下文线索的错误信息能直接引导模型在下一轮调用中自主修正。"
+    },
+    {
+      text: "C. 把参数设计成深层嵌套的 5 层复合对象，要求模型一次性配置完所有环境",
+      isCorrect: false,
+      explanation: "深层嵌套极易造成 JSON 生成格式截断或层级混乱，大幅降低调用成功率。"
+    },
+    {
+      text: "D. 任何修改操作一律自动跳过文件存在性检查，直接强制覆盖写盘",
+      isCorrect: false,
+      explanation: "不做检查的盲目覆盖极易损坏用户已有的代码资产，造成灾难性数据丢失。"
+    }
   ]}
-  correctIndex={0}
-  explanation="Agent 具备 Think-Act-Observe 闭环自愈能力。只要环境提供精确的错误细节（如'未找到 targetSnippet，但第 42 行有相似内容'），Agent 就能自发修正参数并发起下一次正确的调用。空报错或静默失败会彻底切断 Agent 的推理链条。"
 />
 
-<Quiz
-  question="对于'外部世界影响（World-Affecting）'类别的工具（如调用第三方网关转账、发邮件、生产数据库删除操作），架构层面上必须具备的核心机制是什么？"
-  options={[
-    "强制人工确认（Human-in-the-loop）审批护栏与业务级幂等性保障机制",
-    "必须配置最低 10 次的自动静默超时重试，确保每次外部调用都绝对成功",
-    "将所有参数压缩为一个无格式的纯文本长字符串，完全绕过 JSON Schema 校验",
-    "强制要求每次调用必须由多台不同的物理服务器并发重复执行一次"
-  ]}
-  correctIndex={0}
-  explanation="高危工具的操作在物理世界中不可逆。生产级 Harness 架构必须在此类工具调用前设立人工拦截审批（Human-in-the-loop），并通过幂等性令牌（Idempotency Token）防止由于网络超时导致的重复扣款或重复发信等重大事故。"
-/>
+---
+
+## 延伸阅读
+
+* 《AI Agents in Depth: Design Principles and Engineering Practice》（李博杰，2026）第 4.1 节。
+* [Agent 核心架构速查手册](/reference/agent-core-architecture)
+* 下一节：[4.2 MCP 协议架构：统一工具总线标准](/ch04-tools/02-mcp-protocol-architecture)

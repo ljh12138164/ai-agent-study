@@ -2,112 +2,121 @@ import { Quiz } from '@/components/Quiz'
 
 # 7.2 工业级基准测试全景：SWE-bench、WebArena 与 GAIA
 
-> **本节要点**：全景透视代表当今 AI Agent 最高技术试金石的“三大工业级基准测试”：软件工程圣殿 **SWE-bench**、真实网络与系统操纵标尺 **WebArena / OSWorld**、以及通用复杂任务基准 **GAIA**；剖析构建可复现自动化沙盒评测环境的工程难点与防污染红线。
+> 平时看大模型发布会，厂商总喜欢展示 MMLU 或数学题跑分。但这些测试就像让模型“刷高考选择题”，分数再高，也不代表它能进你的团队修代码或者替你订酒店。要想检验一个带手脚的 Agent 在真实世界里能不能打，业内公认的三个硬核考场是：测修 Bug 能力的 **SWE-bench**、测网页真实操作的 **WebArena**、以及测复杂办公多任务的 **GAIA**。这一节我们聊聊这三大标尺到底怎么测，以及为什么模型在真实考场里及格都很难。
 
 ---
 
-## 1. 试金石体系：衡量 Agent 真实战斗力的大基准
+## 1. 从“刷选择题”到“进现场干活”
 
-评测大模型的“做题”能力看 MMLU 或 GSM8K；而评测一个具备手脚的智能体（Agent）在真实世界的“干活”能力，则依赖更具物理复杂度的基准测试体系：
+做选择题只要靠脑内概率推理；但在真实世界里干活，需要面对几万行未知的源码、动辄报错的终端、以及点了没反应的网页按钮。
 
 ```mermaid
-graph TD
-    subgraph BenchmarkPillars["Agent 工业级三大基准支柱"]
-        B1["1. SWE-bench (软件工程权威基准)<br/>· 真实 GitHub 复杂 Issue 修复<br/>· 包含代码探索、编辑、单元测试与 Git 操作<br/>· 判定标准: 官方影子测试用例全绿通过"]
+flowchart TD
+    subgraph Benchmarks["衡量 Agent 真实战斗力的三大考场"]
+        B1["1. SWE-bench (真实代码排障)<br/>· 抓取 GitHub 真实历史 Issue<br/>· 必须定位几万行代码中的隐患并生成 Patch<br/>· 终审标准: 隐藏单元测试全绿通过"]
         
-        B2["2. WebArena / OSWorld (网络与系统操控)<br/>· 真实多站点网络 (电商/论坛/GitLab)<br/>· 真实 Linux/Windows 桌面操作系统操纵<br/>· 判定标准: 数据库/网页端最终业务状态断言"]
+        B2["2. WebArena (多页面端到端操作)<br/>· 真实可交互的本地网络 (电商/论坛/GitLab)<br/>· 模拟人类点击、翻页、加购物车与表单填写<br/>· 终审标准: 数据库最终数据状态是否达标"]
         
-        B3["3. GAIA (通用多模态智能助理)<br/>· 结合复杂搜索、PDF 钻取、电子表格计算<br/>· 极少幻觉容忍度，唯一确定客观事实输出<br/>· 判定标准: 严格精确文本/数值比对"]
+        B3["3. GAIA (复杂多模态办公助理)<br/>· 结合文字搜索、看长 PDF 表格、算 Excel 数据<br/>· 容错率极低，答案必须精确唯一<br/>· 终审标准: 绝对精确的数字或事实比对"]
     end
 ```
 
 ---
 
-## 2. 软件研发圣殿：SWE-bench 深度拆解
+## 2. 软件工程的终极试炼：SWE-bench
 
-**SWE-bench** 是由普林斯顿大学于 2023 年底推出的划时代基准，它彻底终结了“用简单 LeetCode 刷题来评估代码能力”的虚假繁荣：
+2023 年底普林斯顿大学推出的 **SWE-bench**，彻底终结了“用 LeetCode 刷题评价编程能力”的时代。
+
+它直接把开源社区（如 Django、Flask、Sympy）里真实用户报的 Issue 扔给模型：
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Harness as SWE-bench 评测架
-    participant Sandbox as Docker 隔离沙箱
+    participant Runner as 评测框架
+    participant Box as Docker 隔离沙箱
     participant Agent as 待测 Coding Agent
-    participant TestRunner as 隐藏测试回归机
+    participant CI as 独立测试机
 
-    Harness->>Sandbox: 检出开源项目特定历史 Commit (如 Django, Flask)
-    Harness->>Agent: 提供真实用户提交的 Issue 说明文本
+    Runner->>Box: 拉取 Django 某历史版本（几万行真实代码）
+    Runner->>Agent: 发送真实 Issue 描述: "在某种极端传参下 ORM 报错"
     
-    loop Agent 自由探索与开发
-        Agent->>Sandbox: 搜索目录、阅读代码、修改文件、调试报错
+    loop Agent 自由排查
+        Agent->>Box: 翻看代码、grep 搜函数、修改文件、本地跑测试
     end
     
-    Agent-->>Harness: 宣布完成，生成 Git Patch (Diff)
-    Harness->>TestRunner: 将 Patch 打入原始项目，并挂载隐藏测试集
-    TestRunner-->>Harness: 运行 pytest: FAIL_TO_PASS 与 PASS_TO_PASS 校验
-    Harness-->>Agent: 判定是否通过 (Resolved / Unresolved)
+    Agent-->>Runner: 宣布完工，生成 Git Diff 补丁
+    Runner->>CI: 打入补丁，运行隔离的隐藏测试套件
+    CI-->>Runner: 跑双套用例: FAIL_TO_PASS 变绿 + PASS_TO_PASS 无回归
+    Runner-->>Agent: 判定是否真正通过
 ```
 
-### 为什么 SWE-bench 极其残酷且真实？
-1. **代码体量庞大**：项目往往包含数万至数十万行代码，Agent 无法一次性读入上下文，必须自主使用 `grep` 与文件树检索来定位几十个文件中的微小隐患；
-2. **双重测试用例校验**：
-   * `FAIL_TO_PASS`：原先失败的测试，在打上 Agent 的补丁后必须成功跑通（证明修复了 Bug）；
-   * `PASS_TO_PASS`：原先正常通过的历史数百个旧测试，在打上补丁后**依然必须全部保持通过**（证明没有破坏已有功能，无回归 Bug）；
-3. **分水岭指标**：
-   * 2023 年底：GPT-4 裸奔得分仅 **1.96%**；
-   * 2024 年中：结合专用 Harness 框架（如 SWE-agent、Aider）得分攀升至 **15% ~ 25%**；
-   * 2025~2026 年：顶尖模型配合深度 ReAct 与代码自愈闭环，在 SWE-bench Verified 上突破 **50%**。
+### 为什么在 SWE-bench 上拿高分极难？
+1. **代码体量庞大**：项目动辄数十万行，根本塞不进单次上下文，全靠 Agent 用 `grep` 和文件树慢慢摸索；
+2. **严苛的“双向测试断言”**：
+   * `FAIL_TO_PASS`：之前报错的那个测试用例，打上补丁后必须变绿（证明确实修好了 Bug）；
+   * **`PASS_TO_PASS`**：之前本来就正常跑通的几百个老测试，**打上补丁后必须依然全绿（证明没把老业务改崩）**；
+3. **真实及格线有多低？**
+   * 2023 年底，裸模型 GPT-4 直接跑得分只有可怜的 **1.96%**；
+   * 配上专用工具链（Aider、SWE-agent）后慢慢爬升到 **20%**；
+   * 到了 2025~2026 年，结合深度自愈与强力推理模型，头部系统的通过率才艰难突破 **50%**。
 
 ---
 
-## 3. WebArena 与 OSWorld：多模态真实沙盒网络
+## 3. WebArena：不玩花架子，直接查数据库
 
-传统的网页爬虫评测只是被动下载 HTML。而 **WebArena** 搭建了四个完整的真实离线服务：
-* **OneStopShop**（基于 Adobe Magento 的全功能电商平台，带购物车、优惠券与结账流程）；
-* **GitLab 实例**（真实的代码仓库、Merge Request 与 Issue 追踪）；
-* **Reddit 副本**（Postmill 社交论坛）；
-* **OpenStreetMap**（全功能交互地图导航）。
+过去的网页爬虫评测，往往只是让模型在静态 HTML 里找一句话。
+而 **WebArena** 在本地直接搭建了四个完整的交互式开源系统：
+* **开源电商（Magento）**：真实的商品分类、优惠券与购物车；
+* **自建 GitLab**：真实的代码库、Merge Request 与 Issue 追踪；
+* **社交论坛（Reddit 副本）**；
+* **开源地图导航**。
 
-Agent 接收到如“在电商网站中找到价格低于 $50 且评价大于 4 星的蓝牙耳机，将其加入购物车并结算到填写地址页面”的任务，必须跨越登录、搜索、翻页、多条件勾选、表单填充等十几个动态交互节点。
-
----
-
-## 4. GAIA：通用助手的终极珠峰
-
-由 Meta、Hugging Face 等联合推出的 **GAIA (General AI Assistants)** 评测，专门针对真实人类在日常办公中提出的复杂复合难题：
-
-| 难度等级 | 任务特征描述 | 典型任务案例 |
-| :--- | :--- | :--- |
-| **Level 1** | 单步至多步简单信息检索，无需多模态附件 | “找出 2023 年诺贝尔物理学奖得主中最年长者的出生城市。” |
-| **Level 2** | 需要结合长文本 PDF、复杂 Excel 汇总与多重条件计算 | “阅读附件中的财报 PDF 第 15 页表格与第 30 页附注，计算扣除一次性重组费用后的 EBITDA 增速。” |
-| **Level 3** | 长程跨模态多工具自主编排（通常涉及音频切片、图像细节比对与代码编写） | “解压音频附件并过滤背景杂音，提取演讲者报出的 6 位密码，用该密码解密加密文档并提取统计数据。” |
-
-> 📌 **人类 vs. AI**：人类专家在 GAIA 上的得分高达 **92%**，而未配置强大工具链的传统 LLM 得分通常不足 **30%**。GAIA 是检验系统工具调度与多模态整合能力最硬核的靶场。
+系统给 Agent 一个任务：`“在商城里找一款 50 美元以内、评分 4 星以上的无线耳机，用优惠码 DISCOUNT10 下单到收件地址”`。
+评测不看它说了什么，**等它宣布搞定后，脚本直接去查后端的 MySQL 订单表**——如果数据库里没生成这条符合要求的订单记录，直接判 0 分！
 
 ---
 
-## 5. 本节练习与反思
+## 4. GAIA：让人类专家打分的高阶试卷
+
+Meta 和 Hugging Face 联合推出的 **GAIA** 专门测复杂长程任务（比如结合长 PDF、音频和 Excel 汇总）：
+* **人类专家在上面能拿 92 分**（虽然耗时，但步骤很稳）；
+* 没有配齐工具的普通大模型，通常连 **30 分** 都拿不到。
+* 它严禁废话，必须给出精确的最终答案（如特定的金额或专有名词），对任何幻觉零容忍。
+
+---
+
+## 5. 随堂检验
 
 <Quiz
-  question="在软件工程基准测试 SWE-bench 中，为什么除了检验'FAIL_TO_PASS'用例之外，还必须强制运行庞大的'PASS_TO_PASS'测试集？"
+  question="在软件工程基准测试 SWE-bench 中，为什么除了检验‘FAIL_TO_PASS’用例之外，还必须强制运行全量的‘PASS_TO_PASS’历史测试集？"
   options={[
-    "确保 Agent 在修复当前 Bug 的同时，没有引入代码回归（Regression），即没有破坏项目原有的其他任何功能",
-    "因为运行 PASS_TO_PASS 测试用例可以自动为当前代码库在 GitHub 上刷取更多的 Star",
-    "因为 Python 解释器在没有运行历史旧测试时会强制锁死所有的 CPU 线程",
-    "为了让测试运行时间延长到 24 小时以上以测试服务器的抗疲劳能力"
+    {
+      text: "A. 确保 Agent 在修复当前 Bug 的同时，没有引入回归缺陷，即没有破坏项目原有的其他任何稳定功能",
+      isCorrect: true,
+      explanation: "在真实工程中，修好一个 Bug 只是合格线，更难的是不引起代码回归（Regression）。PASS_TO_PASS 是确保既有数千个历史功能完好无损的硬性底线。"
+    },
+    {
+      text: "B. 因为运行 PASS_TO_PASS 可以自动为代码库在 GitHub 上刷更多的 Star",
+      isCorrect: false,
+      explanation: "评测完全在本地离线沙箱进行，与 GitHub 线上点赞完全无关。"
+    },
+    {
+      text: "C. 因为 Python 解释器在不跑老测试时会强制锁死所有的 CPU 硬件核心",
+      isCorrect: false,
+      explanation: "测试由普通的 pytest 进程执行，不涉及硬件强制锁死逻辑。"
+    },
+    {
+      text: "D. 为了让服务器持续运行 24 小时以测试机房的空调节能水平",
+      isCorrect: false,
+      explanation: "基准测试追求高效准确，评测目的是衡量软件代码质量而非机房温控。"
+    }
   ]}
-  correctIndex={0}
-  explanation="在真实软件工程中，写出一段修复特定 Bug 的补丁并不难，难的是'不破坏原有数千个既有功能的正常运转'。FAIL_TO_PASS 验证 Bug 是否被消除，PASS_TO_PASS 则死守非破坏性回归防线，只有两者同时全绿才算真正解决了该 Issue。"
 />
 
-<Quiz
-  question="WebArena 相比传统的静态网页阅读理解数据集，其最具划时代意义的技术突破是什么？"
-  options={[
-    "搭建了包含真实电商、论坛、GitLab 与地图的自托管全功能沙盒网络，评测重点在于跨页面连续动态操作与真实环境数据状态变更",
-    "将所有网页都翻译为了拉丁文以防止任何考生作弊",
-    "完全取消了网络通信协议，所有网页仅通过打印机打印在纸张上供模型扫描",
-    "规定所有智能体只能使用纯英文大写字母来填写网页表单"
-  ]}
-  correctIndex={0}
-  explanation="WebArena 摆脱了静态 HTML 问答的局限，构建了真正能够登录、下单、发帖、合并 PR 的交互式虚拟世界。Agent 的每一次点击和输入都会真实改变后台数据库，评测通过直接断言数据库中的订单状态来进行，代表了动态环境交互评测的最高水准。"
-/>
+---
+
+## 延伸阅读
+
+* 《AI Agents in Depth: Design Principles and Engineering Practice》（李博杰，2026）第 7.2 节。
+* 普林斯顿大学 SWE-bench 官方官方论文与排行榜。
+* 下一节：[7.3 LLM-as-a-Judge 裁判偏差与校准](/ch07-evaluation/03-llm-as-a-judge-and-biases)

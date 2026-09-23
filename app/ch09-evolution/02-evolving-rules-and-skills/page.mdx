@@ -1,102 +1,103 @@
 import { Quiz } from '@/components/Quiz'
 
-# 9.2 规则自进化与技能库积累：将教训固化为可执行工程资产
+# 9.2 规则自进化与技能库积累：把口头叮嘱沉淀为代码资产
 
-> **本节要点**：单次任务中的反思如果仅停留在临时 Context 中，会话一结束便荡然无存。掌握将动态反思沉淀为静态工程资产的 **规则自进化流水线（Automated Rules Evolution）**；深度拆解工业界 `.agentrules` 与 **Agent Skills** 的标准规范；攻克规则库冲突消歧与多层级分层分发机制。
+> 很多用过 AI 编程工具的工程师都遇到过这种憋屈事：你昨天刚在聊天框里严厉叮嘱它“写前端组件绝对不准用内联样式，统一用 Tailwind CSS”，它满口答应“好的我记住了”；结果今天新开一个对话窗口，它又在那大模大样地写 `style={{ color: 'red' }}`。原因很简单：会话窗口是临时的，窗口一关，上下文灰飞烟灭。要想让 Agent 真正像团队里的正式员工一样“越用越顺手”，必须把对话中的纠偏和规范持久化到项目的版本管理中（比如 `.cursorrules`、`AGENTS.md` 或 `skills/` 目录）。这一节我们聊聊怎么让 Agent 自动把教训提炼成项目资产。
 
 ---
 
-## 1. 从“过眼云烟”到“立字为据”：知识资产的持久化
+## 1. 为什么“口头提醒”对新会话永远无效？
 
-很多开发者抱怨自己的 Coding Agent：
-> *“我昨天明明已经告诉过它‘在写 React 组件时禁止使用内联样式，必须使用 Tailwind CSS’，为什么今天开一个新窗口提问，它又在那里写 inline style？！”*
-
-这是因为**单次会话的上下文（Context）是短暂且孤立的**。
-要让智能体真正具备“组织级经验传承”，必须将成功踩坑的经验从短期对话中剥离出来，**写入项目根目录下的版本受控代码资产中**（如 `.cursorrules`、`AGENTS.md` 或标准化的 `skills/` 目录）。
+在单次对话中，Agent 的记忆只能维持在当前上下文窗口里：
 
 ```mermaid
-graph TD
-    UserFeedback["人类关键纠偏指令 / 疑难 Bug 自愈成功经验"] --> Extractor["1. 规则提炼引擎 (Rule Extractor)"]
-    Extractor --> Normalizer["2. 规范化与冲突审查 (Rule Linter & Conflict Check)"]
-    
-    Normalizer --> MergeToGit["3. 自动化合并并提交 Git 仓库<br/>(持久化固化为 .agentrules 或 skills/ 目录)"]
-    
-    MergeToGit --> AllAgents["后续所有启动的 Agent 实例<br/>秒级自动同步全新项目守则，彻底杜绝重蹈覆辙！"]
+flowchart TD
+    subgraph ShortLived["停留在单次对话里的教训 (一次性)"]
+        Chat1["对话 1: 开发者纠偏 '修改完 Prisma schema 记得跑 generate'"] --> Ok1["Agent 在本轮对话中记住了"]
+        Ok1 --> Close["开发者关闭对话窗口 / 新建会话"]
+        Close --> Chat2["对话 2: Agent 上下文被清空，再次忘记跑 generate 导致报错！"]
+    end
 ```
+
+真正靠谱的经验沉淀，必须走**“提炼 -> 写入文件 -> Git 版本受控”**的链路：
+把规则以 Markdown 或 YAML 的形式，直接提交进团队的代码仓库中。这样不仅当前项目的新会话能读到，其他拉取了代码的同事启动 Agent 时也能自动遵守这套规范。
 
 ---
 
-## 2. 规则自进化三步闭环流水线 (The Rules Evolution Loop)
+## 2. 规则自进化的三步闭环
 
-智能体自我沉淀规则不能无节制地乱写，必须遵循严谨的“三步提炼-消歧-合并”闭环：
+让 Agent 自动总结规则不能无脑乱写，否则代码库里很快就会充斥一堆互相矛盾、含糊不清的废话。一般需要经过这三个步骤：
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Developer as 人类工程师
+    actor Dev as 工程师
     participant Agent as 开发智能体
-    participant RuleEngine as 规则进化引擎 (Rule Engine)
-    participant ProjectRepo as Git 代码仓库 (.agentrules)
+    participant RuleEngine as 规则提炼模块
+    participant Git as 项目代码库 (.agentrules)
 
-    Developer->>Agent: "说了多少次了，修改数据库 schema 后必须立刻执行 db:generate！"
-    Agent->>Agent: 修复业务并完成本次操作
+    Dev->>Agent: "说了三次了，修改数据库 schema.prisma 后必须马上运行 npx prisma generate！"
+    Agent->>Agent: 修复代码并执行迁移
     
-    Agent->>RuleEngine: 触发学习意图 (Learn from Correction)
-    RuleEngine->>RuleEngine: 抽象为通用规则条目 (Generalize):<br/>- 触发条件: 修改 prisma/schema.prisma<br/>- 强制行为: 紧接着执行 npx prisma generate
+    Agent->>RuleEngine: 触发经验沉淀指令 (/learn)
+    RuleEngine->>RuleEngine: 规则抽象与泛化:<br/>- 适用范围: 仅限 prisma/schema.prisma 变动时<br/>- 触发动作: 紧接着执行 npx prisma generate
     
-    RuleEngine->>ProjectRepo: 检查已有规则，进行去重与冲突合并
-    RuleEngine->>ProjectRepo: Git Commit 自动追加至 .agentrules
-    ProjectRepo-->>Developer: 提示: "已自动将'Prisma 迁移守则'沉淀至项目知识库"
+    RuleEngine->>Git: 检查既有规则，做去重并合并追加
+    RuleEngine->>Git: 自动生成一条 Git Commit 提交到 .agentrules
+    Git-->>Dev: 提示: "已自动将'Prisma 迁移规范'固化至项目规则库"
 ```
 
-### 规则提炼的三大质量原则
-1. **去语境化与泛化（Context Generalization）**：剔除特定会话的人称代词（如“你昨天说……”），提取为适用于所有团队成员的客观客观工程断言；
-2. **声明精确的触发场景（Trigger Scopes）**：严禁无脑追加全局规则。必须标明“仅在修改 `src/components/**/*.tsx` 时生效”；
-3. **正反例对照（Do & Don't Examples）**：每条规则附带 3 行正确的代码示范与 3 行错误反例，大幅降低模型理解歧义。
+### 写好一条项目规则的核心要素
+1. **明确生效范围（Scope）**：不要搞无差别的全局规则。标清楚这条规则只对 `src/components/**/*.tsx` 生效，还是对所有文件生效；
+2. **剔除特定语境代词**：把“我刚才告诉过你不要……”改成客观陈述：“在修改用户鉴权相关代码时，必须保留 JWT 刷新逻辑”；
+3. **附带正反例（Do & Don't）**：给出 3 行正确示范和 3 行反例，大模型对代码例子的理解远比抽象的形容词准确得多。
 
 ---
 
-## 3. 分层分发架构：防止规则库撑爆上下文
+## 3. 避免规则膨胀：按目录分层挂载
 
-随着项目日积月累，团队沉淀的规则可能达到上百条。如果每一轮会话都把几万字的规则文档塞进 System Prompt，将再次引发 Token 浪费与注意力稀释。
-现代系统采用**目录拓扑分层分发机制（Hierarchical Rule Dispatching）**：
+团队合作几个月后，项目沉淀的规范可能多达几十条。如果每次启动 Agent 都把上万字的规则全部硬塞进系统提示词，会带来两个严重问题：
+* **Token 浪费与延迟飙升**：首包时间明显变慢，API 账单蹭蹭涨；
+* **注意力稀释**：规则太多，模型反而会挑三拣四，抓不住当前操作的重点。
+
+解决办法是**按项目目录做分层加载**：
 
 ```mermaid
-graph TD
-    Root[".agentrules (全局基石法则: Git 提交规范 / 通用安全底线)"]
+flowchart TD
+    Root[".agentrules<br/>(根目录全局规则: Git Commit 格式、安全红线)"]
     
-    Root --> Frontend["frontend/.agentrules (前端专业法则: React Hooks 规范 / Tailwind)"]
-    Root --> Backend["backend/.agentrules (后端专业法则: SQL 注入防护 / 事务处理)"]
-    Root --> Infra["infra/.agentrules (运维专业法则: Terraform / Docker 安全)"]
+    Root --> Frontend["frontend/.agentrules<br/>(仅在编辑前端组件时激活: Tailwind、React Hooks 规范)"]
+    Root --> Backend["backend/.agentrules<br/>(仅在修改后端时激活: 事务隔离、SQL 防注入)"]
+    Root --> Infra["infra/.agentrules<br/>(仅在改运维配置时激活: Dockerfile 最小化镜像规范)"]
 ```
 
-*   当 Agent 在 `frontend/` 目录下操作时，调度器**只动态挂载全局规则与前端子规则**，后端规则保持静默；
-*   按需加载使单次任务的规则开销始终被精确控制在 500 Token 以内，既保持了纪律性，又维持了极致的敏捷与低成本。
+* 当 Agent 在修改 `frontend/` 下的文件时，调度层只给它挂载根目录规则与前端规则，后端的几千字规则保持静默；
+* 每次任务注入的规则严格控制在 500 Token 以内，既能守住规矩，又不会拖慢响应速度。
 
 ---
 
-## 4. 本节练习与反思
+## 4. 自测练习
 
 <Quiz
-  question="在为开发团队部署 Coding Agent 时，将人类在对话中的关键工程纠偏（如代码风格、架构规范）沉淀为项目根目录下的 .agentrules 文件，其最核心的工程价值是什么？"
+  question="在团队协作开发中，将工程师对 Agent 的日常纠偏沉淀为代码库中的 `.agentrules` 或 `AGENTS.md` 文件，最直接的好处是什么？"
   options={[
-    "使得宝贵的人工纠偏经验能够作为静态代码资产跨会话、跨团队成员永久传承，避免后续新打开的 Agent 窗口不断犯下完全相同的低级错误",
-    "能够让所有的 JavaScript 代码在没有安装 Node.js 的情况下直接在微波炉上运行",
-    "使得项目在提交到 GitHub 后自动获得微软公司的全额投资",
-    "可以彻底删除项目中的所有 TypeScript 类型声明文件以提高打字速度"
+    "让规则作为版本受控的工程资产跨会话、跨团队成员持续生效，避免每次新开对话窗口时 Agent 都重复犯下已纠正过的低级错误",
+    "可以让原本需要付费的云端大模型自动转为免费版本",
+    "能够让所有的 Python 代码在没有解释器的情况下直接在浏览器运行",
+    "能够自动把团队所有人的工资条直接同步给代码仓库所有者"
   ]}
   correctIndex={0}
-  explanation="会话窗口具有一次性和易逝性。将教训沉淀在项目的版本控制文件（如 .agentrules / AGENTS.md）中，相当于为整个项目建立了活的'智能体员工培训手册'，使得任何新实例启动时都能立即继承团队历史积累的最佳实践。"
+  explanation="对话历史是短暂且易逝的。将其固化为项目根目录下的规则文件，相当于为当前仓库配备了一份永久的'智能体员工操作守则'，所有新启动的 Agent 实例都能一键继承团队踩坑总结出的规范。"
 />
 
 <Quiz
-  question="当团队长期沉淀了上百条业务规则时，为什么强烈反对将所有规则无条件塞进全局 System Prompt 中？"
+  question="当项目里沉淀的规则逐渐增多时，为什么要采用'按目录分层挂载'而不是把全部规则无脑塞进 System Prompt？"
   options={[
-    "会严重撑爆上下文窗口、大幅增加首包延迟与调用成本，同时大量无关领域的规则会稀释模型的注意力，导致决策准确率下降",
-    "因为大语言模型在阅读超过 10 条规则时会自动向当地消防局拨打火警电话",
-    "因为操作系统的磁盘驱动器不支持存储超过 50 个汉字的规则文档",
-    "因为规则数量过多会导致当前代码编辑器的语法高亮功能彻底损坏"
+    "避免过长规则撑爆上下文并造成严重的注意力稀释，让模型在改前端时只关注前端规范，既节省了 Token 成本，又提升了遵循指令的精准度",
+    "因为大语言模型只要读取超过 20 行文字就会自动断开网络连接",
+    "因为操作系统禁止单个 Markdown 文件的体积超过 1KB",
+    "为了防止代码高亮插件因规则文件太长而发生崩溃"
   ]}
   correctIndex={0}
-  explanation="规则爆炸同样会带来注意力稀释和 KV Cache 击穿。采用分层按需挂载（如前端目录只挂前端规则，修改 SQL 时才动态检索挂载数据库规范），是确保 Agent 既守规矩又保持轻盈高效的必备架构手段。"
+  explanation="如果每次请求都把全量规则（前端、后端、数据库、运维）全部塞给模型，不仅浪费上下文和增加延迟，还会因为无关噪音过多导致模型抓不住重点。按目录或任务类型按需挂载规则，是保持系统轻量与专注的关键手段。"
 />
